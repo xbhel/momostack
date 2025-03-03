@@ -1,0 +1,10 @@
+FROM alpine:3.21
+
+WORKDIR /build
+COPY frp.tar.gz .
+RUN tar -zxvf frp.tar.gz --strip-components 1 \
+    && cp frps /usr/bin/frps \
+    && rm -rf /build/ 
+
+WORKDIR /
+ENTRYPOINT ["/usr/bin/frps"]
