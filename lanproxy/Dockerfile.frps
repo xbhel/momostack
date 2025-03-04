@@ -7,6 +7,6 @@ RUN tar -zxvf frp.tar.gz --strip-components 1 \
     && rm -rf /build/ 
 
 WORKDIR /
-EXPOSE 7000
+EXPOSE 7000 2222
 ENTRYPOINT ["/usr/bin/frps"]
 CMD ["-c", "/opt/frp/conf/frps.toml"]

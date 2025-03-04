@@ -18,7 +18,7 @@ Upload the *./lanproxy* folder to your computer, then run the following commands
 ```bash
 cd lanproxy
 python3 build_image.py --service frps --image-name lanproxy:frps
-docker run -dit -p 7000:7000 -v $(pwd)/conf:/opt/frp/conf --name server lanproxy:frps
+docker run -dit -p 7000:7000 -p 2222:2222 -v $(pwd)/conf:/opt/frp/conf --name server lanproxy:frps
 docker exec -it server ps -ef | grep frps
 ```
 
@@ -27,7 +27,7 @@ If you need to start the **frp** client instead, replace `frps` with `frpc`:
 ```bash
 cd lanproxy
 python3 build_image.py --service frpc --image-name lanproxy:frpc
-docker run -dit -p 22:22 -p 6000:6000 -v $(pwd)/conf:/opt/frp/conf --name client lanproxy:frpc
+docker run -dit -v $(pwd)/conf:/opt/frp/conf --name client lanproxy:frpc
 docker exec -it client ps -ef | grep frpc
  ```
 
