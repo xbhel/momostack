@@ -5,6 +5,7 @@ from subprocess import CompletedProcess, run
 from typing import Dict, Optional
 
 __author__ = "xbhel"
+__email__ = "xbhel@163.com"
 
 
 def exec_shell(command: str) -> CompletedProcess:
@@ -41,29 +42,27 @@ def download(version: str, output_path: Optional[str] = None) -> str:
     raise RuntimeError(f"Failed to download FRP from {url} after 3 attempts.")
 
 
-def build_image(options: Dict[str, str]):
-    service = options["--service"]
-    image_name = options.get("--image-name", f"lanproxy:{service}")
+def build_image(command_args: Dict[str, str]):
+    service = command_args["--service"]
+    image_name = command_args.get("--image-name", f"lanproxy:{service}")
+
     resp = exec_shell(f"docker images --filter reference={image_name}")
     has_image = len(resp.stdout.splitlines()) > 1
-
     if has_image:
         print(f"Skip to build the image of {image_name} due to it already exists.")
-        return image_name
-
-    version = options.get("--version", "0.61.1")
-    archive_path = options.get("--archive")
+        return
     
-    if not archive_path:
-        archive_path = download(version)
-
     tmp_archive_path = "./frp.tar.gz"
-    exec_shell(f"cp {archive_path} {tmp_archive_path}")
-    exec_shell(f"docker image build -f dockerfiles/Dockerfile.{service} -t {image_name} .")
+    version = command_args.get("--version", "0.61.1")
+    archive_file_path = command_args.get("--file")
+
+    if not archive_file_path:
+        archive_file_path = download(version)
+    exec_shell(f"cp {archive_file_path} {tmp_archive_path}")
+    exec_shell(f"docker image build -f Dockerfile.{service} -t {image_name} .")
     exec_shell(f"rm -rf {tmp_archive_path}")
     print(f"The image '{image_name}' has been successfully build.")
-    return image_name
 
 
-if __name__ == '__main__':
-    print(build_image(parse_args()))
+if __name__ == "__main__":
+    build_image(parse_args())

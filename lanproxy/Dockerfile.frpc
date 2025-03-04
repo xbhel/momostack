@@ -3,8 +3,10 @@ FROM alpine:3.21
 WORKDIR /build
 COPY frp.tar.gz .
 RUN tar -zxvf frp.tar.gz --strip-components 1 \
-    && cp frps /usr/bin/frps \
+    && cp frpc /usr/bin/frpc \
     && rm -rf /build/ 
 
 WORKDIR /
-ENTRYPOINT ["/usr/bin/frps"]
+EXPOSE 22 6000
+ENTRYPOINT ["/usr/bin/frpc"]
+CMD ["-c", "/opt/frp/conf/frpc.toml"]
