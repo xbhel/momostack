@@ -29,13 +29,34 @@ Rate Limiting is a process that is used to define the rate and speed at which co
 ## Where to put the Rate Limiter ?
 
 1. **Server side**: This is the least common type of rate limiters. Server side rate limiters are more effective than client side rate limiters. They can not be bypassed by using multiple clients. They also protect the server from malicious users.
-2. **Client side**: This is the most common type of rate limiter. Client side rate limiters are easy to implement, but they are not very effective. Malicious actor can change client-side code and bypass rate limiter.
 
-![Illustration of Rate Limiting on Client-side](../../../docs/.assets/rate-limiting-client-side.png)
+2. **Client side**: This is the most common type of rate limiter. Client side rate limiters are easy to implement, but they are not very effective. Malicious actor can change client-side code and bypass rate limiter. 
 
-3. **Proxy**: There is third and much better option to implement rate limiter as middleware. 
+3. **Proxy**: There is third and much better option to implement rate limiter as middleware. (It is an easier way in a distributed system.)
 
-    **Client -> API Gateway(Gateway with Implemented rate limiter) -> Server**.
+![Request limiter implemented in API Gateway](../../../docs/.assets/rate-limiting-client-side.png)
+
+### Server-side Strategies
+
+There are several major types of rate limiting models that a business can choose between depending on which one offers the best fit for a business based on the nature of the web services that they offer, as we will explore in greater detail below.
+
+- User-Level Rate Limiting: In cases where a system can uniquely identify a user, it can restrict the number of API requests that a user makes in a time period. For example, if the user is only allowed to make two requests per second, the system denies the user’s third request made in the same second. User-level rate limiting ensures fair usage. However, maintaining the usage statistics of each user can create an overhead to the system that if not required for other reasons, could be a drain on resources.
+
+- Server-Level Rate Limiting: Most API-based services are distributed in nature. That means when a user sends a request, it might be serviced by any one of the many servers. In distributed systems, rate limiting can be used for load-sharing among servers. For example, if one server receives a large chunk of requests out of ten servers in a distributed system and others are mostly idle, the system is not fully utilized. There will be a restriction on the number of service requests that a particular server can handle in server-level rate limiting. If a server receives requests that are over this set limit, they are either dropped or routed to another server. Server-level rate limiting ensures the system’s availability and prevents denial of service attacks targeted at a particular server.
+
+- Geography-Based Rate Limiting: Most API-based services have servers spread across the globe. When a user issues an API request, a server close to the user’s geographic location fulfils it. Organizations implement geography-based rate limiting to restrict the number of service requests from a particular geographic area. This can also be done based on timing. For example, if the number of requests coming from a particular geographic location is small from 1:00 am to 6:00 am, then a web server can have a rate limiting rule for this particular period. If there is an attack on the server during these hours, the number of requests will spike. In the event of a spike, the rate limiting mechanism will then trigger an alert and the organization can quickly respond to such an attack.
+
+### Client-side Strategies
+
+The strategies described so far apply to rate limiting on the server side. However, these strategies can inform the design of clients, especially when you consider that many components in a distributed system are both client and server.
+
+Just as a service's primary purpose in using rate limiting is to protect itself and maintain availability, a client's primary purpose is to fulfill the request it is making to a service. A service might be unable to fulfill a request from a client for a variety of reasons, including the following:
+- The service is unreachable because of network conditions.
+- The service returned a non-specific error.
+- The service denies the request because of an authentication or authorization failure.
+- The client request is invalid or malformed.
+- <u>The service rate-limits the caller and sends a back-pressure signal (commonly a 429 response).</u> (**xbhel: this is what I'm facing.**)
+
 
 ## Common Rate Limiting Algorithms
 
@@ -44,3 +65,7 @@ Rate Limiting is a process that is used to define the rate and speed at which co
 - Fixed Window Counter algorithm
 - Sliding Window Logs algorithm
 - Sliding Window Counter algorithm
+
+### Token Bucket Algorithm
+
+The Token Bucket algorithm works as follows: 

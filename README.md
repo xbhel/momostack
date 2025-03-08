@@ -24,10 +24,29 @@ Upload the *./lanproxy* folder to your computer, then run the following commands
 ```bash
 cd lanproxy
 python3 build_image.py --service frps --image-name lanproxy:frps
-# docker run -dit -p 7000:7000 -p 2222:2222 -p 7500:7500 -v $(pwd)/conf:/opt/frp/conf --name server lanproxy:frps
-docker run --restart=always --network host -dit -v $(pwd)/conf:/opt/frp/conf --name server lanp
-roxy:frps
+
+# network mode: bridge 
+# docker run --restart=always -dit \
+# -p 7000:7000 -p 2222:2222 -p 7500:7500 \
+# -v $(pwd)/conf:/opt/frp/conf \
+# -e FRP_TOKEN=$FRP_TOKEN \
+# -e FRP_DASHBOARD_USER=$FRP_DASHBOARD_USER \
+# -e  FRP_DASHBOARD_PASSWD=$FRP_DASHBOARD_PASSWD \
+# --name server lanproxy:frps
+
+# network mode: host 
+docker run --restart=always \
+--network host -dit \
+-v $(pwd)/conf:/opt/frp/conf \
+-e FRP_TOKEN=$FRP_TOKEN \
+-e FRP_DASHBOARD_USER=$FRP_DASHBOARD_USER \
+-e  FRP_DASHBOARD_PASSWD=$FRP_DASHBOARD_PASSWD \
+--name server lanproxy:frps
+
 docker exec -it server ps -ef | grep frps
+
+# By default, frps logs will be output to stdout if you don’t configure a log output file in frps.toml.
+# In this case, you can use the following command to view the logs of frps.
 docker logs -f server
 ```
 
