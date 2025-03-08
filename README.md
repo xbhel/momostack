@@ -7,9 +7,15 @@ Acquired a server with the public IP address.
 - Create a Dedicated User for Regular Operations (Optional).
 - Configure Password-less SSH Login (Optional).
 
-Install the **[frp](https://github.com/fatedier/frp)** to access your computer in a LAN network.
+Install the **[frp](https://github.com/fatedier/frp)** to access your computer in a LAN network. 
+
+- [FRP Document.](https://gofrp.org/zh-cn/docs/)
+- [FRP README.md](https://github.com/fatedier/frp)
+- [FRP Server(frps) Full Configuration](https://github.com/fatedier/frp/blob/dev/conf/frps_full_example.toml)
+- [FRP Client(frps) Full Configuration](https://github.com/fatedier/frp/blob/dev/conf/frpc_full_example.toml)
 
 > **[frp](https://github.com/fatedier/frp)** is a fast reverse proxy that allows you to expose a local server located behind a NAT or firewall to the Internet. It currently supports TCP and UDP, as well as HTTP and HTTPS protocols, enabling requests to be forwarded to internal services via domain name.
+
 
 **Install FRP**
 
@@ -18,8 +24,11 @@ Upload the *./lanproxy* folder to your computer, then run the following commands
 ```bash
 cd lanproxy
 python3 build_image.py --service frps --image-name lanproxy:frps
-docker run -dit -p 7000:7000 -p 2222:2222 -v $(pwd)/conf:/opt/frp/conf --name server lanproxy:frps
+# docker run -dit -p 7000:7000 -p 2222:2222 -p 7500:7500 -v $(pwd)/conf:/opt/frp/conf --name server lanproxy:frps
+docker run --restart=always --network host -dit -v $(pwd)/conf:/opt/frp/conf --name server lanp
+roxy:frps
 docker exec -it server ps -ef | grep frps
+docker logs -f server
 ```
 
 If you need to start the **frp** client instead, replace `frps` with `frpc`:
