@@ -227,4 +227,4 @@ dist
 # Custom
 .mypy_cache/
 .venv/
-
+.coverage
