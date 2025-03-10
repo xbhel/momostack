@@ -69,3 +69,16 @@ Just as a service's primary purpose in using rate limiting is to protect itself 
 ### Token Bucket Algorithm
 
 The Token Bucket algorithm works as follows: 
+
+1. Define a token bucket which is a container that has pre-defined capacity.
+2. Tokens are put in the bucket(refill into the bucket) at preset rates periodically. Once the bucket is full, no more tokens are add.
+3. When a request arrived, a token is removed from the bucket.
+4. If there are no tokens in the bucket, the request will be dropped and False will return.
+
+Here's a Python implementation of the Token Bucket Algorithm: 
+
+- [*Python-Token-Bucket-Rate-Limiter.py*](./src/ratelimiter.py)
+- [Tests for Python-Token-Bucket-Rate-Limiter.py](./tests/unit/test_ratelimiter.py)
+
+
+

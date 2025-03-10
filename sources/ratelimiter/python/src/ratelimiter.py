@@ -8,6 +8,13 @@ class TokenBucketLimiter:
         refill_rate: int,
         refill_interval: int,
     ):
+        """
+        Initialize a bucket with a preset capacity
+        :param capacity: Maximum number of tokens the bucket can hold.
+        :param refill_rate: Number of tokens added per refill interval.
+        :param refill_interval: Time interval (in seconds) at which tokens are added.
+        """
+        
         # 1. Initialize a bucket with a preset capacity
         self.token_num = capacity
         self.capacity = capacity
@@ -18,28 +25,29 @@ class TokenBucketLimiter:
 
     def acquire(self):
         # 2. Check for any pending refills; if there are, we'll refill the bucket.
-        self._check_and_refill()
+        self._refill()
 
-        # 3. When a request arrives, we check if there is at least one token left in the bucket.
-        # If there is, we take one token out of the bucket, and the request goes through.
+        # 3. If tokens are available, consume one and allow the request
         if self.token_num > 0:
             self.token_num -= 1
             return True
 
-        # 4. If there are no tokens in the bucket, the request is dropped and False is returned.
+        # 4. If no tokens are available, the request is denied
         return False
 
-    def _check_and_refill(self):
-        current = datetime.now()
+    def _refill(self):
+        """
+        Replenishes tokens in the bucket based on the elapsed time since the last update.
+        """
+        current_time = datetime.now()
+        elapsed_intervals = (current_time - self.last_updated).total_seconds() // self.refill_interval
 
-        interval_num = int(
-            (current - self.last_updated).total_seconds() // self.refill_interval
-        )
-
-        refill_count = interval_num * self.refill_rate
-
-        self.token_num = min(self.token_num + refill_count, self.capacity)
-        self.last_updated = min(
-            current,
-            self.last_updated + timedelta(seconds=refill_count * self.refill_interval),
-        )
+        if elapsed_intervals > 0:
+            # Calculate how many tokens should be added
+            refill_count = int(elapsed_intervals * self.refill_rate)
+            self.token_num = min(self.token_num + refill_count, self.capacity)
+            # Update the last updated timestamp accordingly
+            self.last_updated = min(
+                current_time,
+                self.last_updated + timedelta(seconds=refill_count * self.refill_interval),
+            )

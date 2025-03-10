@@ -228,3 +228,5 @@ dist
 .mypy_cache/
 .venv/
 .coverage
+.vscode
+__pycache__/
