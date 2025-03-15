@@ -35,12 +35,12 @@ python3 build_image.py --service frps --image-name lanproxy:frps
 # --name server lanproxy:frps
 
 # network mode: host 
-docker run --restart=always \
+docker run --restart=on-failure \
 --network host -dit \
 -v $(pwd)/conf:/opt/frp/conf \
 -e FRP_TOKEN=$FRP_TOKEN \
 -e FRP_DASHBOARD_USER=$FRP_DASHBOARD_USER \
--e  FRP_DASHBOARD_PASSWD=$FRP_DASHBOARD_PASSWD \
+-e FRP_DASHBOARD_PASSWD=$FRP_DASHBOARD_PASSWD \
 --name server lanproxy:frps
 
 docker exec -it server ps -ef | grep frps
@@ -48,6 +48,7 @@ docker exec -it server ps -ef | grep frps
 # By default, frps logs will be output to stdout if you don’t configure a log output file in frps.toml.
 # In this case, you can use the following command to view the logs of frps.
 docker logs -f server
+docker exec 2678cd7a612d tail -f /var/log/frp/frps.log
 ```
 
 If you need to start the **frp** client instead, replace `frps` with `frpc`:
@@ -55,8 +56,16 @@ If you need to start the **frp** client instead, replace `frps` with `frpc`:
 ```bash
 cd lanproxy
 python3 build_image.py --service frpc --image-name lanproxy:frpc
-docker run -dit -v $(pwd)/conf:/opt/frp/conf --name client lanproxy:frpc
+
+docker run --restart=on-failure \
+--network host -dit \
+-v $(pwd)/conf:/opt/frp/conf \
+-e FRP_TOKEN=$FRP_TOKEN \
+-e FRP_SERVER_ADDR=$FRP_SERVER_ADDR \
+--name client lanproxy:frpc
+
 docker exec -it client ps -ef | grep frpc
+docker logs -f client
  ```
 
 By default, when you run *build_image.py* to build the image, it will fetch **frp** from GitHub. If you're offline or unable to access GitHub, you can manually download the frp archive beforehand and use the `--file path/to/frp_xxx.tar.gz` option to specify it for building the image:
