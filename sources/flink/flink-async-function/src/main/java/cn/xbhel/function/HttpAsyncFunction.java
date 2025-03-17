@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -20,6 +21,7 @@ import org.apache.flink.streaming.api.functions.async.ResultFuture;
 import org.apache.flink.streaming.api.functions.async.RichAsyncFunction;
 import org.apache.flink.util.Preconditions;
 import org.apache.flink.util.function.SerializableFunction;
+import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.methods.HttpUriRequest;
@@ -143,23 +145,99 @@ public class HttpAsyncFunction<R> extends RichAsyncFunction<HttpRequest, R> {
         throw new IllegalStateException(statusCode + "|" + errorMessage);
     }
 
-    HttpUriRequest createApacheHttpRequest(HttpRequest httpRequest) {
-        // Convert My's HttpRequest to Apache HttpUriRequest
-        var requestBuilder = RequestBuilder.create(httpRequest.getMethod());
+    CloseableHttpClient createHttpClient() {
+        // 1. Request Configuration
+        var requestConfig = RequestConfig.custom()
+                // Determines the timeout in milliseconds until a connection is established.
+                .setConnectTimeout(60000)
+                // Defines the socket timeout (SO_TIMEOUT) in milliseconds, which is the timeout
+                // for waiting for data or, put differently,
+                // a maximum period inactivity between two consecutive data packets.
+                .setSocketTimeout(60000)
+                // Returns the timeout in milliseconds used when requesting a connection from
+                // the connection manager.
+                .setConnectionRequestTimeout(60000)
+                // Determines whether redirects should be handled automatically.
+                .setRedirectsEnabled(true)
+                // Returns the maximum number of redirects to be followed.
+                .setMaxRedirects(50)
+                // Determines whether circular redirects (redirects to the same location) should
+                // be allowed.
+                .setCircularRedirectsAllowed(false)
+                // Determines whether authentication should be handled automatically.
+                .setAuthenticationEnabled(true)
+                .build();
+
+        // 2. Http Connection Manager Configration
+        // Set TTL to 5min.
+        // TTL defines maximum life span of persistent connections regardless of their
+        // expiration setting.
+        // No persistent connection will be re-used past its TTL value.
+        var manager = new PoolingHttpClientConnectionManager(5, TimeUnit.MINUTES);
+        // Dncrease max total connection from 20 to 10.
+        manager.setMaxTotal(10);
+        // Increase default max connection per route from 2 to 10.
+        // Since I'm always use the same route.
+        manager.setDefaultMaxPerRoute(10);
+        // Checks the connection if the elapsed time since
+        // the last use of the connection exceeds the timeout that has been set.
+        // Increase re-validated connection time from 2s to 5s.
+        manager.setValidateAfterInactivity(2000);
+
+
+        var httpClientBuilder = HttpClientBuilder
+                .create()
+                .setDefaultRequestConfig(requestConfig)
+                .setConnectionManager(manager)
+                // By default, Apache HttpClient retries at most 3 times all idempotent requests
+                // completed with IOException,
+                // Here are some IOException subclasses that HttpClient considers non-retryable.
+                // More specifically, they are:
+                // InterruptedIOException, ConnectException, UnknownHostException, SSLException
+                // and NoRouteToHostException.
+                .disableAutomaticRetries();
+
+        if()
+
+        this.httpClient = httpClientBuilder.build();
+    }
+
+    protected String praseResponseErrorMessage(HttpResponse response) {
+        try {
+            return EntityUtils.toString(response.getEntity());
+        } catch (IOException e) {
+            throw new IllegalStateException("Error while parsing error message.", e);
+        }
+    }
+
+    HttpUriRequest convertToHttpUriRequest(HttpRequest httpRequest) {
+        var charset = Optional.ofNullable(httpRequest.getCharset())
+                .orElse(StandardCharsets.UTF_8);
+        var requestBuilder = RequestBuilder.create(httpRequest.getMethod())
+                // The defalut value is set to "ISO-8859-1"
+                .setCharset(charset)
+                .setUri(httpRequest.getUrl());
         Optional.ofNullable(httpRequest.getHeaders())
                 .ifPresent(headers -> headers.forEach(requestBuilder::addHeader));
         Optional.ofNullable(httpRequest.getQueryParams())
                 .ifPresent(params -> params.forEach(requestBuilder::addHeader));
-        var charset = Optional.ofNullable(httpRequest.getCharset()).orElse(StandardCharsets.UTF_8);
         try {
-            return requestBuilder
-                    .setUri(httpRequest.getUrl())
-                    // The defalut value is set to "ISO-8859-1"
-                    .setCharset(charset)
-                    .setEntity(new StringEntity(objectMapper.writeValueAsString(httpRequest.getData()), charset))
-                    .build();
+            if (Objects.nonNull(httpRequest.getData())) {
+                requestBuilder.setEntity(new StringEntity(
+                        objectMapper.writeValueAsString(httpRequest.getData()), charset));
+            }
+            return requestBuilder.build();
         } catch (JsonProcessingException e) {
-            throw new IllegalArgumentException(e);
+            throw new IllegalArgumentException("Failed to serialize request data.", e);
+        }
+    }
+
+    void silentSleep(long sleepTime) {
+        try {
+            Thread.sleep(sleepTime);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Sleep interrupted", e);
         }
     }
 

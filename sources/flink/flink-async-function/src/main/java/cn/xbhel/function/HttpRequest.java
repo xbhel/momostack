@@ -7,7 +7,7 @@ import lombok.Data;
 import lombok.NonNull;
 
 @Data
-public class HttpRequest{
+public class HttpRequest {
     @NonNull
     private String url;
     @NonNull
@@ -16,4 +16,9 @@ public class HttpRequest{
     private Map<String, String> queryParams;
     private Object data;
     private Charset charset;
+
+    @Override
+    public String toString() {
+        return "HttpRequest [url=" + url + ", method=" + method + "]";
+    }
 }
