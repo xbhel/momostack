@@ -10,7 +10,7 @@ public interface HttpRetryStrategy extends Serializable {
     boolean isRetryable(
             int attempts,
             @Nullable Integer statusCode,
-            @Nullable String resonseErrorMessage,
+            @Nullable String responseErrorMessage,
             @Nullable IOException exception);
 
     long getBackoffTimeMills(int attempts);
@@ -18,11 +18,11 @@ public interface HttpRetryStrategy extends Serializable {
     default void failed(
             HttpRequest request,
             @Nullable Integer statusCode,
-            @Nullable String resonseErrorMessage,
+            @Nullable String responseErrorMessage,
             @Nullable IOException exception) {
-        throw new IllegalStateException(String.format(
+        throw new RetryableException(String.format(
                 "Failed to request %s with statusCode: %d, errorMessage: %s.",
-                request, statusCode, resonseErrorMessage), exception);
+                request, statusCode, responseErrorMessage), exception);
     }
 
 }

@@ -2,6 +2,7 @@ package cn.xbhel.function;
 
 import java.io.IOException;
 import java.io.InterruptedIOException;
+import java.io.Serial;
 import java.net.ConnectException;
 import java.net.UnknownHostException;
 import java.util.Set;
@@ -13,6 +14,9 @@ import lombok.RequiredArgsConstructor;
 
 @RequiredArgsConstructor
 public class DefaultHttpRetryStrategy implements HttpRetryStrategy {
+
+    @Serial
+    private static final long serialVersionUID = 7990363225309679139L;
 
     private final int maxAttempts;
     private final double backoffFactor;

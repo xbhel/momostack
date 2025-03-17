@@ -4,13 +4,14 @@ import java.nio.charset.Charset;
 import java.util.Map;
 
 import lombok.Data;
-import lombok.NonNull;
+
+import javax.annotation.Nonnull;
 
 @Data
 public class HttpRequest {
-    @NonNull
+    @Nonnull
     private String url;
-    @NonNull
+    @Nonnull
     private String method;
     private Map<String, String> headers;
     private Map<String, String> queryParams;
