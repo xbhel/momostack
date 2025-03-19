@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<book>
+    <title id="1">title 1</title>
+    <title id="2">title 2</title>
+    <title id="3">title 3</title>
+    <author>Joshua Bloch</author>
+    <image src="xxx"></image>
+</book>

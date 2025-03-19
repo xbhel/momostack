@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<book>
+    <title id="1">1</title>
+    <title id="2">2</title>
+    <title id="3">3</title>
+    <author>Joshua Bloch</author>
+</book>
