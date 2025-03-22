@@ -1,9 +1,8 @@
-package cn.xbhel.util;
+package cn.xbhel.http;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import cn.xbhel.util.ThreadUtils;
 import org.junit.jupiter.api.Test;
 
 class ThreadUtilsTest {
@@ -23,9 +22,9 @@ class ThreadUtilsTest {
     @Test
     void testSilentSleep_WhenInterrupted_ShouldThrowIllegalStateException() {
         var testThread = new Thread(() -> {
-            assertThrows(IllegalStateException.class, 
-            () -> ThreadUtils.silentSleep(1000), 
-            "Should throw IllegalStateException when interrupted");
+            assertThrows(IllegalStateException.class,
+                    () -> ThreadUtils.silentSleep(1000),
+                    "Should throw IllegalStateException when interrupted");
         });
 
         testThread.start();

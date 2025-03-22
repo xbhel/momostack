@@ -13,7 +13,6 @@ import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
-import cn.xbhel.util.ThreadUtils;
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpHeaders;
 import org.apache.http.client.config.RequestConfig;
@@ -40,18 +39,48 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import lombok.extern.slf4j.Slf4j;
 
 /**
-
- * A wrapper for Apache HttpClient providing enhanced functionality including:
- * <ol>
- * <li>Automatic retry handling</li>
- * <li>JSON serialization/deserialization</li>
- * <li>Flexible request/response handling</li>
- * <li>Connection pooling</li>
- * </ol>
- *<p>
- * Note: The caller is responsible for closing the response in order to reuse
- * the connection even it is not used.
+ * An enhanced HTTP client that wraps Apache HttpClient with additional
+ * features.
+ * 
+ * <p>
+ * Key features:
  * </p>
+ * <ul>
+ * <li><b>Automatic Retry</b> - Configurable retry logic for failed
+ * requests</li>
+ * <li><b>JSON Handling</b> - Built-in JSON serialization and
+ * deserialization</li>
+ * <li><b>Flexible Response Processing</b> - Support for custom response
+ * handlers</li>
+ * <li><b>Connection Pooling</b> - Efficient connection reuse and
+ * management</li>
+ * </ul>
+ * 
+ * <p>
+ * Usage example:
+ * </p>
+ * 
+ * <pre>
+ * // Using shared instance (recommended for most cases)
+ * HttpClient client = HttpClient.getInstance();
+ * 
+ * // Or create custom instance
+ * HttpClient client = HttpClient.builder()
+ *         .connectTimeout(5000)
+ *         .maxConnTotal(50)
+ *         .build();
+ * </pre>
+ * 
+ * <p>
+ * <b>Important:</b> Always close the response after use to properly release
+ * the connection back to the pool:
+ * </p>
+ * 
+ * <pre>
+ * try (CloseableHttpResponse response = client.execute(request)) {
+ *     // Process response
+ * }
+ * </pre>
  *
  * @author xbhel
  */
@@ -111,7 +140,8 @@ public class HttpClient implements Closeable {
     }
 
     public CloseableHttpResponse execute(HttpRequest request) throws Exception {
-        // You can set any attribute to the context for your own purpose.
+        // The HttpContext allows storing custom attributes that can be accessed
+        // throughout the request execution lifecycle
         var context = HttpClientContext.create();
         context.setAttribute("request-id", UUID.randomUUID().toString());
         return this.execute(request, context, null);
@@ -140,19 +170,21 @@ public class HttpClient implements Closeable {
                     return holder.response;
                 }
 
-                if (!retryStrategy.isRetryable(++attempts, holder.statusCode, holder.lastException, context)) {
+                if (!retryStrategy.isRetryable(++attempts, holder.statusCode, holder.exception, context)) {
                     break;
                 }
-                // Close failed response that is required in order to reuse connection
+                // Close failed response that is required in order to reuse the underlying
+                // connection
                 holder.close();
 
                 var delay = retryStrategy.getBackoffTimeMillis(attempts);
-                log.warn("Failed to request {}, attempt #{} after {}ms", request, attempts, delay);
-                ThreadUtils.silentSleep(delay);
+                log.warn("Request failed for {}. Retrying attempt #{} after {} ms delay", request, attempts, delay);
+                TimeUnit.MILLISECONDS.sleep(delay);
             }
-            retryStrategy.failed(request, holder.statusCode, holder.lastException, context);
+            retryStrategy.failed(request, holder.statusCode, holder.exception, context);
         } catch (Exception e) {
-            // Close failed response that is required in order to reuse connection
+            // Close failed response that is required in order to reuse the underlying
+            // connection
             holder.close();
             throw e;
         }
@@ -164,16 +196,16 @@ public class HttpClient implements Closeable {
             var response = internalHttpClient.execute(httpRequest, context);
             return ResponseHolder.withResponse(response);
         } catch (IOException e) {
-            return ResponseHolder.withLastException(e);
+            return ResponseHolder.withException(e);
         }
     }
 
-    HttpUriRequest createRequest(HttpRequest request, RequestConfig requestConfig) throws IOException {
+    static HttpUriRequest createRequest(HttpRequest request, RequestConfig requestConfig) throws IOException {
         var defaultRequestHeaders = new HashMap<String, String>();
-        defaultRequestHeaders.put(HttpHeaders.CONTENT_TYPE, ContentType.APPLICATION_JSON.toString());
+        // use application/json;charset=UTF-8 as the default accept type
         defaultRequestHeaders.put(HttpHeaders.ACCEPT, ContentType.APPLICATION_JSON.toString());
-        var charset = Optional.ofNullable(request.getCharset()).orElse(StandardCharsets.UTF_8);
 
+        var charset = Optional.ofNullable(request.getCharset()).orElse(StandardCharsets.UTF_8);
         var requestBuilder = RequestBuilder.create(request.getMethod());
         Optional.ofNullable(requestConfig).ifPresent(requestBuilder::setConfig);
         Optional.ofNullable(request.getQueryParams()).ifPresent(params -> params.forEach(requestBuilder::addParameter));
@@ -182,8 +214,9 @@ public class HttpClient implements Closeable {
             headers.forEach(requestBuilder::addHeader);
         });
         if (request.getData() != null) {
-            requestBuilder.setEntity(createEntity(request.getData(),
-                    charset, defaultRequestHeaders.get(HttpHeaders.CONTENT_TYPE)));
+            var entity = createEntity(request.getData(), charset, defaultRequestHeaders.get(HttpHeaders.CONTENT_TYPE));
+            defaultRequestHeaders.putIfAbsent(HttpHeaders.CONTENT_TYPE, entity.getContentType().toString());
+            requestBuilder.setEntity(entity);
         }
         return requestBuilder
                 .setCharset(charset)
@@ -191,26 +224,38 @@ public class HttpClient implements Closeable {
                 .build();
     }
 
-    HttpEntity createEntity(Object data, Charset charset, String contentType) throws IOException {
-        if (data instanceof String str) {
-            return new StringEntity(str, charset);
-        }
-        if (ContentType.APPLICATION_JSON.getMimeType().equals(contentType)) {
-            return new StringEntity(OBJECT_MAPPER.writeValueAsString(data), charset);
-        }
+    static HttpEntity createEntity(Object data, Charset charset, String contentType) throws IOException {
         if (data instanceof HttpEntity httpEntity) {
             return httpEntity;
         }
+
+        var ct = Optional.ofNullable(contentType)
+                .map(x -> ContentType.parse(x).withCharset(charset)).orElse(null);
+
+        if (data instanceof CharSequence str) {
+            return new StringEntity(str.toString(), ct);
+        }
+
         if (data instanceof byte[] bytes) {
-            return new ByteArrayEntity(bytes);
+            return new ByteArrayEntity(bytes, ct);
         }
+
         if (data instanceof File file) {
-            return new FileEntity(file, ContentType.create(contentType, charset));
+            return new FileEntity(file, ct);
         }
+
         if (data instanceof InputStream input) {
-            return new InputStreamEntity(input, ContentType.create(contentType, charset));
+            return new InputStreamEntity(input, ct);
         }
-        throw new UnsupportedOperationException("Unsupported data type: " + data.getClass().getName());
+        
+        // use application/json;charset=UTF-8 as the default content type
+        if (contentType == null || ContentType.APPLICATION_JSON.getMimeType().equals(contentType)) {
+            return new StringEntity(OBJECT_MAPPER.writeValueAsString(data),
+                    ContentType.APPLICATION_JSON.withCharset(charset));
+        }
+
+        throw new UnsupportedOperationException(String.format(
+                "Unsupported data type: %s with contentType: %s", data.getClass().getName(), contentType);
     }
 
     @Override
@@ -222,7 +267,7 @@ public class HttpClient implements Closeable {
 
     static class ResponseHolder {
         CloseableHttpResponse response;
-        IOException lastException;
+        IOException exception;
         Integer statusCode;
 
         static ResponseHolder withResponse(CloseableHttpResponse response) {
@@ -232,9 +277,9 @@ public class HttpClient implements Closeable {
             return holder;
         }
 
-        static ResponseHolder withLastException(IOException lastException) {
+        static ResponseHolder withException(IOException lastException) {
             var holder = new ResponseHolder();
-            holder.lastException = lastException;
+            holder.exception = lastException;
             return holder;
         }
 
@@ -250,7 +295,8 @@ public class HttpClient implements Closeable {
     }
 
     public static class Builder {
-        // a lazy initialization singleton for thread safety
+        // A singleton instance that is lazily initialized for thread safety.
+        // This ensures the HttpClient is only created when first accessed.
         static final HttpClient INSTANCE = builder().build();
 
         static final int UNLIMITED = -1;
@@ -343,4 +389,5 @@ public class HttpClient implements Closeable {
             return new HttpClient(closeableHttpClient, retryStrategy);
         }
     }
+
 }

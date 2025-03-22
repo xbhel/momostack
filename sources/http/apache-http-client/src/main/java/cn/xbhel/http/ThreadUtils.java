@@ -1,4 +1,4 @@
-package cn.xbhel.util;
+package cn.xbhel.http;
 
 public final class ThreadUtils {
 

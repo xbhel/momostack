@@ -8,7 +8,6 @@ import java.util.Set;
 
 import javax.net.ssl.SSLException;
 
-import lombok.ToString;
 import org.apache.http.protocol.HttpContext;
 
 import lombok.RequiredArgsConstructor;
