@@ -95,7 +95,7 @@ public class HttpClient implements Closeable {
     final CloseableHttpClient internalHttpClient;
     final HttpRetryStrategy retryStrategy;
 
-    private HttpClient(CloseableHttpClient internalHttpClient, HttpRetryStrategy retryStrategy) {
+    HttpClient(CloseableHttpClient internalHttpClient, HttpRetryStrategy retryStrategy) {
         this.internalHttpClient = internalHttpClient;
         this.retryStrategy = retryStrategy;
     }
@@ -209,15 +209,16 @@ public class HttpClient implements Closeable {
         var requestBuilder = RequestBuilder.create(request.getMethod());
         Optional.ofNullable(requestConfig).ifPresent(requestBuilder::setConfig);
         Optional.ofNullable(request.getQueryParams()).ifPresent(params -> params.forEach(requestBuilder::addParameter));
-        Optional.ofNullable(request.getHeaders()).ifPresent(headers -> {
-            defaultRequestHeaders.putAll(headers);
-            headers.forEach(requestBuilder::addHeader);
-        });
+        Optional.ofNullable(request.getHeaders()).ifPresent(defaultRequestHeaders::putAll);
         if (request.getData() != null) {
             var entity = createEntity(request.getData(), charset, defaultRequestHeaders.get(HttpHeaders.CONTENT_TYPE));
-            defaultRequestHeaders.putIfAbsent(HttpHeaders.CONTENT_TYPE, entity.getContentType().toString());
+            if(entity.getContentType() != null) {
+                defaultRequestHeaders.putIfAbsent(HttpHeaders.CONTENT_TYPE, entity.getContentType().toString());
+            }
             requestBuilder.setEntity(entity);
         }
+        defaultRequestHeaders.forEach(requestBuilder::addHeader);
+
         return requestBuilder
                 .setCharset(charset)
                 .setUri(request.getUrl())
@@ -255,7 +256,7 @@ public class HttpClient implements Closeable {
         }
 
         throw new UnsupportedOperationException(String.format(
-                "Unsupported data type: %s with contentType: %s", data.getClass().getName(), contentType);
+                "Unsupported data type: %s with contentType: %s", data.getClass().getName(), contentType));
     }
 
     @Override

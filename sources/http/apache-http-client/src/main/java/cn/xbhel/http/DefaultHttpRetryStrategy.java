@@ -18,8 +18,6 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class DefaultHttpRetryStrategy implements HttpRetryStrategy {
 
-    public static final DefaultHttpRetryStrategy INSTANCE = new DefaultHttpRetryStrategy();
-
     private static final int DEFAULT_MAX_ATTEMPTS = 3;
     private static final double DEFAULT_BACKOFF_FACTOR = 0.5d;
     private static final Set<Integer> DEFAULT_RETRYABLE_STATUS_CODES = Set.of(
@@ -35,6 +33,8 @@ public class DefaultHttpRetryStrategy implements HttpRetryStrategy {
             ConnectException.class,
             SSLException.class);
 
+    public static final DefaultHttpRetryStrategy INSTANCE = new DefaultHttpRetryStrategy();
+
     private final int maxAttempts;
     private final double backoffFactor;
     private final Set<Integer> retryableStatusCodes;
@@ -43,6 +43,10 @@ public class DefaultHttpRetryStrategy implements HttpRetryStrategy {
     public DefaultHttpRetryStrategy() {
         this(DEFAULT_MAX_ATTEMPTS, DEFAULT_BACKOFF_FACTOR,
                 DEFAULT_RETRYABLE_STATUS_CODES, DEFAULT_NO_RETRYABLE_EXCEPTIONS);
+    }
+
+    public DefaultHttpRetryStrategy(int maxAttempts, double backoffFactor) {
+        this(maxAttempts, backoffFactor, DEFAULT_RETRYABLE_STATUS_CODES, DEFAULT_NO_RETRYABLE_EXCEPTIONS);
     }
 
     @Override
