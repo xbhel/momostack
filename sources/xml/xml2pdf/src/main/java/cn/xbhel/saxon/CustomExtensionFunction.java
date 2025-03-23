@@ -1,7 +1,6 @@
-package cn.xbhel.saxon.extensionfunc;
+package cn.xbhel.saxon;
 
 import java.util.Arrays;
-import java.util.stream.Stream;
 
 import lombok.extern.slf4j.Slf4j;
 import net.sf.saxon.s9api.ExtensionFunction;
@@ -19,7 +18,7 @@ import net.sf.saxon.s9api.XdmValue;
  * extension functions in Java.</a>
  */
 @Slf4j
-public class CustomExtentsionFunction implements ExtensionFunction {
+public class CustomExtensionFunction implements ExtensionFunction {
 
     @Override
     public QName getName() {
