@@ -6,15 +6,20 @@ import java.net.ConnectException;
 import java.net.UnknownHostException;
 import java.util.Set;
 
+import javax.annotation.Nullable;
 import javax.net.ssl.SSLException;
 
 import org.apache.http.protocol.HttpContext;
 
+import lombok.Data;
 import lombok.RequiredArgsConstructor;
+import lombok.experimental.Accessors;
 
 /**
  * @author xbhel
  */
+@Data
+@Accessors(chain = true)
 @RequiredArgsConstructor
 public class DefaultHttpRetryStrategy implements HttpRetryStrategy {
 
@@ -37,16 +42,25 @@ public class DefaultHttpRetryStrategy implements HttpRetryStrategy {
 
     private final int maxAttempts;
     private final double backoffFactor;
-    private final Set<Integer> retryableStatusCodes;
-    private final Set<Class<? extends Exception>> noRetryableExceptions;
+
+    /**
+     * <p>
+     * The flag to determine whether to fail when the maximum number of retries is
+     * exhausted. If it is set to false, the failed will be hide due to unexpected
+     * HTTP status codes when the max attempts is reached.
+     * </p>
+     * <p>
+     * <b>Note:</b> Exceptions thrown during HTTP request execution are never hidden.
+     * The failedAtRetriesExhausted flag only affects failures due to
+     * unexpected HTTP status codes.
+     * <p>
+     */
+    private boolean failedAtRetriesExhausted = true;
+    private Set<Integer> retryableStatusCodes = DEFAULT_RETRYABLE_STATUS_CODES;
+    private Set<Class<? extends Exception>> noRetryableExceptions = DEFAULT_NO_RETRYABLE_EXCEPTIONS;
 
     public DefaultHttpRetryStrategy() {
-        this(DEFAULT_MAX_ATTEMPTS, DEFAULT_BACKOFF_FACTOR,
-                DEFAULT_RETRYABLE_STATUS_CODES, DEFAULT_NO_RETRYABLE_EXCEPTIONS);
-    }
-
-    public DefaultHttpRetryStrategy(int maxAttempts, double backoffFactor) {
-        this(maxAttempts, backoffFactor, DEFAULT_RETRYABLE_STATUS_CODES, DEFAULT_NO_RETRYABLE_EXCEPTIONS);
+        this(DEFAULT_MAX_ATTEMPTS, DEFAULT_BACKOFF_FACTOR);
     }
 
     @Override
@@ -68,4 +82,15 @@ public class DefaultHttpRetryStrategy implements HttpRetryStrategy {
     public long getBackoffTimeMillis(int attempts) {
         return (long) (backoffFactor * Math.pow(2, attempts) * 1000);
     }
+
+    @Override
+    public void failed(HttpRequest request, @Nullable Integer statusCode, @Nullable Exception exception,
+            HttpContext context) throws Exception {
+        HttpRetryStrategy.super.failed(request, statusCode, exception, context);
+        if (failedAtRetriesExhausted) {
+            throw new HttpExecutionException(
+                    "Failed to execute request ["+ request +"] due to unexpected http status code" + statusCode);
+        }
+    }
+
 }
