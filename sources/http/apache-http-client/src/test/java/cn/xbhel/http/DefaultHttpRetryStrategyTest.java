@@ -9,9 +9,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
 class DefaultHttpRetryStrategyTest {
 
     @ParameterizedTest
@@ -76,16 +73,16 @@ class DefaultHttpRetryStrategyTest {
         var request = new HttpRequest("http://test.com", "GET");
         var retryStrategy = new DefaultHttpRetryStrategy();
 
-        Assertions.assertThrows(HttpExecutionException.class,
-                () -> retryStrategy.failed(request, 500, null, HttpClientContext.create()));
+        Assertions.assertDoesNotThrow(() -> retryStrategy.failed(request, 500, null, HttpClientContext.create()));
     }
 
     @Test
     void testFailed_hideFailedWithUnexpectedStatusCode() {
         var request = new HttpRequest("http://test.com", "GET");
         var retryStrategy = new DefaultHttpRetryStrategy()
-        .setFailedAtRetriesExhausted(false);
-        Assertions.assertDoesNotThrow(() -> retryStrategy.failed(request, 500, null, HttpClientContext.create()));
+                .setFailedAtRetriesExhausted(true);
+        Assertions.assertThrows(HttpExecutionException.class,
+                () -> retryStrategy.failed(request, 500, null, HttpClientContext.create()));
     }
 
 }

@@ -46,16 +46,14 @@ public class DefaultHttpRetryStrategy implements HttpRetryStrategy {
     /**
      * <p>
      * The flag to determine whether to fail when the maximum number of retries is
-     * exhausted. If it is set to false, the failed will be hide due to unexpected
+     * exhausted. If it is set to true, the failed will be thrown due to unexpected
      * HTTP status codes when the max attempts is reached.
      * </p>
-     * <p>
      * <b>Note:</b> Exceptions thrown during HTTP request execution are never hidden.
      * The failedAtRetriesExhausted flag only affects failures due to
      * unexpected HTTP status codes.
-     * <p>
      */
-    private boolean failedAtRetriesExhausted = true;
+    private boolean failedAtRetriesExhausted = false;
     private Set<Integer> retryableStatusCodes = DEFAULT_RETRYABLE_STATUS_CODES;
     private Set<Class<? extends Exception>> noRetryableExceptions = DEFAULT_NO_RETRYABLE_EXCEPTIONS;
 

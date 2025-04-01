@@ -11,7 +11,7 @@ public class Main {
     public static void main(String[] args) throws Exception {
         var httpClient = HttpClient.getInstance();
         try(var response = httpClient.execute(
-                new HttpRequest("https://github.com/", "GET")
+                new HttpRequest("https://www.baidu.com/", "GET")
         )){
             log.info("status code: {}, response: {}",
                     response.getStatusLine().getStatusCode(), EntityUtils.toString(response.getEntity()));

@@ -2,7 +2,6 @@
 <Configuration monitorInterval="5">
     <properties>
         <property name="LOG_HOME">logs</property>
-        <property name="LOG_LEVEL" value="INFO" />
         <property name="LOG_PATTERN" value="%date{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n" />
     </properties>
 
@@ -11,8 +10,7 @@
             <PatternLayout pattern="${LOG_PATTERN}" />
         </Console>
 
-        <RollingFile name="RollingFile" fileName="${LOG_HOME}/app.log"
-            filePattern="${LOG_HOME}/app-%d{yyyy-MM-dd HH}.log">
+        <RollingFile name="RollingFile" fileName="${LOG_HOME}/app.log" filePattern="${LOG_HOME}/app-%d{yyyy-MM-dd HH}.log">
             <ThresholdFilter level="DEBUG" onMatch="ACCEPT" onMismatch="DENY" />
             <PatternLayout pattern="${LOG_PATTERN}" />
             <Policies>
@@ -25,8 +23,12 @@
     </Appenders>
 
     <Loggers>
-        <Root level="${LOG_LEVEL}">
+        <Root level="INFO">
             <AppenderRef ref="Console" />
         </Root>
+        <!-- https://hc.apache.org/httpcomponents-client-4.5.x/logging.html -->
+        <Logger name="org.apache.http" level="DEBUG">
+            <AppenderRef ref="Console" />
+        </Logger>
     </Loggers>
 </Configuration>
