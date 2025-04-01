@@ -1,12 +1,12 @@
 package cn.xbhel.flink.function;
 
-import java.io.Serial;
-import java.util.Collections;
-import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.ForkJoinPool;
-
+import cn.xbhel.http.DefaultHttpRetryStrategy;
+import cn.xbhel.http.HttpClient;
+import cn.xbhel.http.HttpRequest;
+import cn.xbhel.http.HttpRetryStrategy;
+import lombok.RequiredArgsConstructor;
+import lombok.Setter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.metrics.Counter;
 import org.apache.flink.metrics.ThreadSafeSimpleCounter;
@@ -19,13 +19,12 @@ import org.apache.flink.util.function.SerializableFunction;
 import org.apache.flink.util.function.SerializableSupplier;
 import org.apache.http.HttpResponse;
 
-import cn.xbhel.http.DefaultHttpRetryStrategy;
-import cn.xbhel.http.HttpClient;
-import cn.xbhel.http.HttpRequest;
-import cn.xbhel.http.HttpRetryStrategy;
-import lombok.RequiredArgsConstructor;
-import lombok.Setter;
-import lombok.extern.slf4j.Slf4j;
+import java.io.Serial;
+import java.util.Collections;
+import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ForkJoinPool;
 
 /**
  * How to use the retry mechanism provided by
@@ -62,7 +61,7 @@ public class HttpAsyncFunction<T extends HttpRequest, R> extends RichAsyncFuncti
 
     private transient Counter errorCounter;
     private transient HttpClient httpClient;
-    private transient ExecutorService executorService;
+    private transient ExecutorService workerExecutor;
 
     @Override
     public void open(Configuration parameters) throws Exception {
@@ -70,7 +69,7 @@ public class HttpAsyncFunction<T extends HttpRequest, R> extends RichAsyncFuncti
         this.httpClient = Optional.ofNullable(httpClientFactory)
                 .map(SerializableSupplier::get)
                 .orElseGet(() -> HttpClient.builder().retryStrategy(RETRY_STRATEGY).build());
-        this.executorService = Optional.ofNullable(executorServiceFactory)
+        this.workerExecutor = Optional.ofNullable(executorServiceFactory)
                 .map(SerializableSupplier::get)
                 .orElseGet(ForkJoinPool::commonPool);
         this.errorCounter = getRuntimeContext().getMetricGroup()
@@ -80,12 +79,13 @@ public class HttpAsyncFunction<T extends HttpRequest, R> extends RichAsyncFuncti
     @Override
     public void asyncInvoke(T request, ResultFuture<R> resultFuture) {
         CompletableFuture.<Either<R, Throwable>>supplyAsync(() -> {
-            try {
-                return Either.Left(httpClient.execute(request, responseHandler));
-            } catch (Exception exception) {
-                return Either.Right(exception);
-            }
-        }, executorService).whenComplete((result, ex) -> {
+                    try {
+                        return Either.Left(httpClient.execute(request, responseHandler));
+                    } catch (Exception exception) {
+                        return Either.Right(exception);
+                    }
+                }, workerExecutor
+        ).whenCompleteAsync((result, ex) -> {
             if (result.isLeft()) {
                 onSuccess(request, result.left(), resultFuture);
             } else {
@@ -117,8 +117,8 @@ public class HttpAsyncFunction<T extends HttpRequest, R> extends RichAsyncFuncti
         if (httpClient != null) {
             httpClient.close();
         }
-        if (executorService != null && !executorService.isShutdown()) {
-            executorService.shutdown();
+        if (workerExecutor != null) {
+            workerExecutor.shutdown();
         }
     }
 
