@@ -1,24 +1,22 @@
 package cn.xbhel.http;
 
+import lombok.RequiredArgsConstructor;
+import lombok.Setter;
+import lombok.experimental.Accessors;
+import org.apache.http.protocol.HttpContext;
+
+import javax.annotation.Nullable;
+import javax.net.ssl.SSLException;
 import java.io.IOException;
 import java.io.InterruptedIOException;
 import java.net.ConnectException;
 import java.net.UnknownHostException;
 import java.util.Set;
 
-import javax.annotation.Nullable;
-import javax.net.ssl.SSLException;
-
-import org.apache.http.protocol.HttpContext;
-
-import lombok.Data;
-import lombok.RequiredArgsConstructor;
-import lombok.experimental.Accessors;
-
 /**
  * @author xbhel
  */
-@Data
+@Setter
 @Accessors(chain = true)
 @RequiredArgsConstructor
 public class DefaultHttpRetryStrategy implements HttpRetryStrategy {
@@ -85,7 +83,7 @@ public class DefaultHttpRetryStrategy implements HttpRetryStrategy {
     public void failed(HttpRequest request, @Nullable Integer statusCode, @Nullable Exception exception,
             HttpContext context) throws Exception {
         HttpRetryStrategy.super.failed(request, statusCode, exception, context);
-        if (failedAtRetriesExhausted) {
+        if (failedAtRetriesExhausted && statusCode != null) {
             throw new HttpExecutionException(
                     "Failed to execute request ["+ request +"] due to unexpected http status code" + statusCode);
         }

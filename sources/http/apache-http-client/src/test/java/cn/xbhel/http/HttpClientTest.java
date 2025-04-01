@@ -417,7 +417,9 @@ class HttpClientTest {
         HttpClient httpClient;
         try (var httpClientBuilderStatic = mockStatic(HttpClientBuilder.class)) {
             httpClientBuilderStatic.when(HttpClientBuilder::create).thenReturn(mockHttpClientBuilder);
-            httpClient = builder().build();
+            httpClient = builder()
+                    .retryStrategy(new DefaultHttpRetryStrategy().setFailedAtRetriesExhausted(true))
+                    .build();
         }
         var mockCloseableHttpResponse = mock(CloseableHttpResponse.class, RETURNS_DEEP_STUBS);
         when(mockCloseableHttpResponse.getStatusLine().getStatusCode()).thenReturn(400);

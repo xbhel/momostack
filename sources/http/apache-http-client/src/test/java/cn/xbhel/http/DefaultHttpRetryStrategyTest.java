@@ -85,4 +85,12 @@ class DefaultHttpRetryStrategyTest {
                 () -> retryStrategy.failed(request, 500, null, HttpClientContext.create()));
     }
 
+    @Test
+    void testInitialize_withCustomMaxAttemptsAndFactor() {
+        var retryStrategy = new DefaultHttpRetryStrategy(3, 0.1);
+        Assertions.assertEquals(200, retryStrategy.getBackoffTimeMillis(1));
+        Assertions.assertEquals(400, retryStrategy.getBackoffTimeMillis(2));
+        Assertions.assertEquals(800, retryStrategy.getBackoffTimeMillis(3));
+    }
+
 }
