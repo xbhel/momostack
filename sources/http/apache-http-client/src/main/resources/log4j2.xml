@@ -2,23 +2,41 @@
 <Configuration monitorInterval="5">
     <properties>
         <property name="LOG_HOME">logs</property>
-        <property name="LOG_PATTERN" value="%date{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n" />
+        <property name="LOG_PATTERN"
+            value="%date{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n" />
     </properties>
 
     <Appenders>
         <Console name="Console" target="SYSTEM_OUT">
             <PatternLayout pattern="${LOG_PATTERN}" />
         </Console>
+        <!-- 
+        Log4j2 initializes all appenders listed in the configuration file during startup,
+        regardless of whether they are referenced by a logger. Why?
 
-        <RollingFile name="RollingFile" fileName="${LOG_HOME}/app.log" filePattern="${LOG_HOME}/app-%d{yyyy-MM-dd HH}.log">
-            <ThresholdFilter level="DEBUG" onMatch="ACCEPT" onMismatch="DENY" />
+        1. Log4j2 prepares resources (like file handles) in advance for potential use.
+        2. The RollingFile appender checks if its target directory (logs/) exists and creates it if
+        missing, even if no logs are ever written to it.
+         -->
+        <RollingFile name="NormalFile" fileName="${LOG_HOME}/app.log"
+            filePattern="${LOG_HOME}/app-%d{yyyy-MM-dd HH}.log">
+            <ThresholdFilter level="INFO" onMatch="ACCEPT" onMismatch="DENY" />
             <PatternLayout pattern="${LOG_PATTERN}" />
             <Policies>
-                <OnStartupTriggeringPolicy />
+                 <OnStartupTriggeringPolicy />
                 <TimeBasedTriggeringPolicy />
                 <SizeBasedTriggeringPolicy size="16MB" />
             </Policies>
             <DefaultRolloverStrategy max="30" />
+        </RollingFile>
+
+        <RollingFile name="ErrorFile" fileName="${LOG_HOME}/error.log"
+            filePattern="${LOG_HOME}/error-%d{yyyy-MM-dd}.log">
+            <ThresholdFilter level="ERROR" onMatch="ACCEPT" onMismatch="DENY" />
+            <PatternLayout pattern="${LOG_PATTERN}" />
+            <Policies>
+                <TimeBasedTriggeringPolicy />
+            </Policies>
         </RollingFile>
     </Appenders>
 
@@ -27,7 +45,7 @@
             <AppenderRef ref="Console" />
         </Root>
         <!-- https://hc.apache.org/httpcomponents-client-4.5.x/logging.html -->
-        <Logger name="org.apache.http" level="DEBUG">
+        <Logger name="org.apache.http" level="INFO">
             <AppenderRef ref="Console" />
         </Logger>
     </Loggers>

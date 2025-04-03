@@ -1,24 +1,5 @@
 package cn.xbhel.http;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import lombok.extern.slf4j.Slf4j;
-import org.apache.http.HttpEntity;
-import org.apache.http.HttpHeaders;
-import org.apache.http.client.config.RequestConfig;
-import org.apache.http.client.methods.CloseableHttpResponse;
-import org.apache.http.client.methods.HttpUriRequest;
-import org.apache.http.client.methods.RequestBuilder;
-import org.apache.http.client.protocol.HttpClientContext;
-import org.apache.http.entity.*;
-import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.impl.client.HttpClientBuilder;
-import org.apache.http.impl.conn.PoolingHttpClientConnectionManager;
-import org.apache.http.protocol.HttpContext;
-import org.apache.http.util.EntityUtils;
-
 import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
@@ -32,10 +13,36 @@ import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
+import org.apache.http.HttpEntity;
+import org.apache.http.HttpHeaders;
+import org.apache.http.HttpResponse;
+import org.apache.http.client.config.RequestConfig;
+import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.client.methods.HttpUriRequest;
+import org.apache.http.client.methods.RequestBuilder;
+import org.apache.http.client.protocol.HttpClientContext;
+import org.apache.http.entity.ByteArrayEntity;
+import org.apache.http.entity.ContentType;
+import org.apache.http.entity.FileEntity;
+import org.apache.http.entity.InputStreamEntity;
+import org.apache.http.entity.StringEntity;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClientBuilder;
+import org.apache.http.impl.conn.PoolingHttpClientConnectionManager;
+import org.apache.http.protocol.HttpContext;
+import org.apache.http.util.EntityUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+
 /**
  * An enhanced HTTP client that wraps Apache HttpClient with additional
  * features.
- * 
+ *
  * <p>
  * Key features:
  * </p>
@@ -49,27 +56,27 @@ import java.util.function.Function;
  * <li><b>Connection Pooling</b> - Efficient connection reuse and
  * management</li>
  * </ul>
- * 
+ *
  * <p>
  * Usage example:
  * </p>
- * 
+ *
  * <pre>
  * // Using shared instance (recommended for most cases)
  * HttpClient client = HttpClient.getInstance();
- * 
+ *
  * // Or create custom instance
  * HttpClient client = HttpClient.builder()
  *         .connectTimeout(5000)
  *         .maxConnTotal(50)
  *         .build();
  * </pre>
- * 
+ *
  * <p>
  * <b>Important:</b> Always close the response after use to properly release
  * the connection back to the pool:
  * </p>
- * 
+ *
  * <pre>
  * try (CloseableHttpResponse response = client.execute(request)) {
  *     // Process response
@@ -78,9 +85,9 @@ import java.util.function.Function;
  *
  * @author xbhel
  */
-@Slf4j
 public class HttpClient implements Closeable {
 
+    private static final Logger log = LoggerFactory.getLogger(HttpClient.class);
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper()
             .disable(DeserializationFeature.FAIL_ON_IGNORED_PROPERTIES)
             .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
@@ -127,7 +134,7 @@ public class HttpClient implements Closeable {
         }
     }
 
-    public <T> T execute(HttpRequest request, Function<CloseableHttpResponse, T> responseHandler) throws Exception {
+    public <T> T execute(HttpRequest request, Function<HttpResponse, T> responseHandler) throws Exception {
         try (var response = execute(request)) {
             return responseHandler.apply(response);
         }
@@ -206,7 +213,7 @@ public class HttpClient implements Closeable {
         Optional.ofNullable(request.getHeaders()).ifPresent(defaultRequestHeaders::putAll);
         if (request.getData() != null) {
             var entity = createEntity(request.getData(), charset, defaultRequestHeaders.get(HttpHeaders.CONTENT_TYPE));
-            if(entity.getContentType() != null) {
+            if (entity.getContentType() != null) {
                 defaultRequestHeaders.putIfAbsent(HttpHeaders.CONTENT_TYPE, entity.getContentType().toString());
             }
             requestBuilder.setEntity(entity);
@@ -240,9 +247,11 @@ public class HttpClient implements Closeable {
         }
 
         if (data instanceof InputStream input) {
-            return new InputStreamEntity(input, ct);
+            // Convert input stream to byte array for reusability during retries
+            // Input stream can only be consumed once, so we buffer it first
+            return new ByteArrayEntity(input.readAllBytes(), ct);
         }
-        
+
         // use application/json;charset=UTF-8 as the default content type
         if (contentType == null || ContentType.APPLICATION_JSON.getMimeType().equals(contentType)) {
             return new StringEntity(OBJECT_MAPPER.writeValueAsString(data),
@@ -316,46 +325,84 @@ public class HttpClient implements Closeable {
             return this;
         }
 
+        /**
+         * Determines the timeout in milliseconds until a connection is established.
+         */
         public Builder connectTimeout(int connectTimeoutMillis) {
             this.connectTimeout = connectTimeoutMillis;
             return this;
         }
 
+        /**
+         * Defines the socket timeout (SO_TIMEOUT) in milliseconds, which is the timeout
+         * for waiting for data or, put differently, a maximum period inactivity between
+         * two consecutive data packets.
+         */
         public Builder socketTimeout(int socketTimeoutMillis) {
             this.socketTimeout = socketTimeoutMillis;
             return this;
         }
 
+        /**
+         * Returns the timeout in milliseconds used when requesting a connection from
+         * the connection manager.
+         */
         public Builder connectionRequestTimeout(int connectionRequestTimeoutMillis) {
             this.connectionRequestTimeout = connectionRequestTimeoutMillis;
             return this;
         }
 
+        /**
+         * Determines whether redirects should be handled automatically.
+         */
         public Builder disableRedirect() {
             this.isDisableRedirect = true;
             return this;
         }
 
+        /**
+         * TTL defines maximum life span of persistent connections regardless of their
+         * expiration setting. No persistent connection will be re-used past its TTL
+         * value. The default value is -1 (UNLIMITED).
+         */
         public Builder connKeepAliveTime(long connKeepAliveTimeMillis) {
             this.connKeepAliveTime = connKeepAliveTimeMillis;
             return this;
         }
 
+        /**
+         * The maximum number of connections that will be allowed. The default value is
+         * 20.
+         */
         public Builder maxConnTotal(int maxConnTotal) {
             this.maxConnTotal = maxConnTotal;
             return this;
         }
 
+        /**
+         * The maximum number of connections that will be allowed per route. The default
+         * value is 2.
+         */
         public Builder maxConnPerRoute(int maxConnPerRoute) {
             this.maxConnPerRoute = maxConnPerRoute;
             return this;
         }
 
+        /**
+         * Checks the connection if the elapsed time since the last use of the
+         * connection
+         * exceeds the timeout that has been set. The default value is 2s.
+         */
         public Builder validateConnAfterInactivity(int validateConnAfterInactivityMillis) {
             this.validateConnAfterInactivity = validateConnAfterInactivityMillis;
             return this;
         }
 
+        /**
+         * Makes this instance of HttpClient proactively evict idle connections from the
+         * connection pool using a background thread. The default value is -1
+         * (UNLIMITED).
+         */
         public Builder maxConnIdleTime(long maxConnIdleTimeMillis) {
             this.maxConnIdleTime = maxConnIdleTimeMillis;
             return this;
@@ -379,6 +426,12 @@ public class HttpClient implements Closeable {
             var closeableHttpClient = httpClientBuilder
                     .setConnectionManager(connManager)
                     .setDefaultRequestConfig(requestConfig)
+                    // By default, Apache HttpClient retries at most 3 times all idempotent requests
+                    // completed with IOException,
+                    // Here are some IOException subclasses that HttpClient considers non-retryable.
+                    // More specifically, they are:
+                    // InterruptedIOException, ConnectException, UnknownHostException, SSLException
+                    // and NoRouteToHostException.
                     .disableAutomaticRetries()
                     .build();
             return new HttpClient(closeableHttpClient, retryStrategy);

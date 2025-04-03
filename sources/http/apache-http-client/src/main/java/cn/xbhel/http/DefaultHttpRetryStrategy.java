@@ -85,7 +85,7 @@ public class DefaultHttpRetryStrategy implements HttpRetryStrategy {
         HttpRetryStrategy.super.failed(request, statusCode, exception, context);
         if (failedAtRetriesExhausted && statusCode != null) {
             throw new HttpExecutionException(
-                    "Failed to execute request ["+ request +"] due to unexpected http status code" + statusCode);
+                    "Failed to execute request ["+ request +"] due to unexpected http status code " + statusCode);
         }
     }
 
