@@ -30,12 +30,13 @@ public class DefaultHttpRetryStrategy implements HttpRetryStrategy {
             503, // Service Unavailable
             500 // Internal Server Error
     );
-    private static final Set<Class<? extends Exception>> DEFAULT_NO_RETRYABLE_EXCEPTIONS = Set.of(
-            InterruptedIOException.class,
-            UnknownHostException.class,
-            ConnectException.class,
-            SSLException.class);
-
+    private static final Set<Class<? extends Exception>> NO_RETRYABLE_IO_EXCEPTIONS = Set.of(
+        InterruptedIOException.class, 
+        UnknownHostException.class,
+        ConnectException.class, 
+        SSLException.class);
+    private static final Set<Class<? extends Throwable>> DEFAULT_RETRYABLE_EXCEPTIONS = Set.of(IOException.class);
+    
     public static final DefaultHttpRetryStrategy INSTANCE = new DefaultHttpRetryStrategy();
 
     private final int maxAttempts;
@@ -47,13 +48,14 @@ public class DefaultHttpRetryStrategy implements HttpRetryStrategy {
      * exhausted. If it is set to true, the failed will be thrown due to unexpected
      * HTTP status codes when the max attempts is reached.
      * </p>
-     * <b>Note:</b> Exceptions thrown during HTTP request execution are never hidden.
+     * <b>Note:</b> Exceptions thrown during HTTP request execution are never
+     * hidden.
      * The failedAtRetriesExhausted flag only affects failures due to
      * unexpected HTTP status codes.
      */
     private boolean failedAtRetriesExhausted = false;
     private Set<Integer> retryableStatusCodes = DEFAULT_RETRYABLE_STATUS_CODES;
-    private Set<Class<? extends Exception>> noRetryableExceptions = DEFAULT_NO_RETRYABLE_EXCEPTIONS;
+    private Set<Class<? extends Throwable>> retryableExceptions = DEFAULT_RETRYABLE_EXCEPTIONS;
 
     public DefaultHttpRetryStrategy() {
         this(DEFAULT_MAX_ATTEMPTS, DEFAULT_BACKOFF_FACTOR);
@@ -61,17 +63,20 @@ public class DefaultHttpRetryStrategy implements HttpRetryStrategy {
 
     @Override
     public boolean isRetryable(int attempts, Integer statusCode, Exception exception, HttpContext context) {
-        var retryable = false;
         if (attempts <= maxAttempts) {
             if (statusCode != null) {
-                retryable |= retryableStatusCodes.contains(statusCode);
+                return retryableStatusCodes.contains(statusCode);
             }
-            if (exception != null) {
-                retryable |= exception instanceof IOException
-                        && noRetryableExceptions.stream().noneMatch(cls -> cls.isInstance(exception));
+
+            if(exception != null) {
+                var isRetryableEx = retryableExceptions.stream().anyMatch(cls -> cls.isInstance(exception));
+                if(isRetryableEx && exception instanceof IOException) {
+                    isRetryableEx = NO_RETRYABLE_IO_EXCEPTIONS.stream().noneMatch(cls -> cls.isInstance(exception));
+                }
+                return isRetryableEx;
             }
         }
-        return retryable;
+        return false;
     }
 
     @Override
@@ -85,7 +90,7 @@ public class DefaultHttpRetryStrategy implements HttpRetryStrategy {
         HttpRetryStrategy.super.failed(request, statusCode, exception, context);
         if (failedAtRetriesExhausted && statusCode != null) {
             throw new HttpExecutionException(
-                    "Failed to execute request ["+ request +"] due to unexpected http status code " + statusCode);
+                    "Failed to execute request [" + request + "] due to unexpected http status code " + statusCode);
         }
     }
 

@@ -8,6 +8,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.metrics.Counter;
@@ -26,7 +27,6 @@ public abstract class AbstractAsyncFunction<IN, OUT> extends RichAsyncFunction<I
 
     @Serial
     private static final long serialVersionUID = 1954155896213202242L;
-    private static final int DEFAULT_POOL_SIZE = Math.max(1, Runtime.getRuntime().availableProcessors() * 2);
 
     /**
      * The number of tasks in the same taskManager
@@ -52,10 +52,10 @@ public abstract class AbstractAsyncFunction<IN, OUT> extends RichAsyncFunction<I
         super.open(parameters);
         synchronized (AbstractAsyncFunction.class) {
             if (counter == 0) {
+                var poolSize = Math.max(1, Runtime.getRuntime().availableProcessors() * 2);
                 executorService = Optional.ofNullable(executorServiceFactory)
                         .map(SerializableSupplier::get)
-                        .orElseGet(() -> Executors.newFixedThreadPool(
-                                DEFAULT_POOL_SIZE,
+                        .orElseGet(() -> Executors.newFixedThreadPool(poolSize,
                                 new DefaultThreadFactory("asyncThreadPool")));
             }
             counter++;
@@ -79,8 +79,8 @@ public abstract class AbstractAsyncFunction<IN, OUT> extends RichAsyncFunction<I
         }, executorService).whenComplete((result, ex) -> {
             var error = ex;
 
-            if(result != null) {
-                if(result.isLeft()) {
+            if (result != null) {
+                if (result.isLeft()) {
                     onSuccess(input, result.left(), resultFuture);
                     return;
                 }
@@ -110,12 +110,7 @@ public abstract class AbstractAsyncFunction<IN, OUT> extends RichAsyncFunction<I
     public void timeout(IN input, ResultFuture<OUT> resultFuture) throws Exception {
         log.error("Failed to execute [{}] due to async function call has timed out.", input);
         errorCounter.inc();
-        if (logFailureOnly) {
-            resultFuture.complete(Collections.emptyList());
-        } else {
-            // completeExceptionally with a TimeoutException
-            super.timeout(input, resultFuture);
-        }
+        onError(input, new TimeoutException("Async function call has timed out."), resultFuture);
     }
 
     @Override
@@ -130,7 +125,8 @@ public abstract class AbstractAsyncFunction<IN, OUT> extends RichAsyncFunction<I
                     // Disable new tasks from being submitted
                     executorService.shutdown();
                     // Wait a while for existing tasks to terminate
-                    if (!executorService.awaitTermination(terminationTimeout.toMillis(), TimeUnit.MILLISECONDS)) {
+                    if (!executorService.awaitTermination(
+                            terminationTimeout.toMillis(), TimeUnit.MILLISECONDS)) {
                         executorService.shutdownNow();
                     }
                 } catch (InterruptedException interrupted) {

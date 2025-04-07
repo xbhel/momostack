@@ -2,6 +2,7 @@ package cn.xbhel.http;
 
 import java.io.IOException;
 import java.io.InterruptedIOException;
+import java.util.Set;
 
 import org.apache.http.client.protocol.HttpClientContext;
 import org.junit.jupiter.api.Assertions;
@@ -53,6 +54,26 @@ class DefaultHttpRetryStrategyTest {
     }
 
     @Test
+    void testIsRetryable_withCustomStatusCodes() {
+        var retryStrategy = new DefaultHttpRetryStrategy(3, 0.1);
+        retryStrategy.setRetryableStatusCodes(Set.of(9999));
+        var retryable9999 = retryStrategy.isRetryable(1, 9999, null, HttpClientContext.create());
+        var retryable500 = retryStrategy.isRetryable(1, 500, null, HttpClientContext.create());
+        Assertions.assertTrue(retryable9999);
+        Assertions.assertFalse(retryable500);
+    }
+
+    @Test
+    void testIsRetryable_withCustomExceptions() {
+        var retryStrategy = new DefaultHttpRetryStrategy(3, 0.1);
+        retryStrategy.setRetryableExceptions(Set.of(RuntimeException.class));
+        var retryableRuntimeEx = retryStrategy.isRetryable(1, null, new RuntimeException(), HttpClientContext.create());
+        var retryableIOEx = retryStrategy.isRetryable(1, null, new IOException(), HttpClientContext.create());
+        Assertions.assertTrue(retryableRuntimeEx);
+        Assertions.assertFalse(retryableIOEx);
+    }
+
+    @Test
     void testGetBackoffTimeMillis() {
         var retryStrategy = new DefaultHttpRetryStrategy();
         Assertions.assertEquals(1000, retryStrategy.getBackoffTimeMillis(1));
@@ -69,7 +90,7 @@ class DefaultHttpRetryStrategyTest {
     }
 
     @Test
-    void testFailed_withStatusCode() {
+    void testFailed_DefaultSilentWithStatusCode() {
         var request = new HttpRequest("http://test.com", "GET");
         var retryStrategy = new DefaultHttpRetryStrategy();
 
@@ -77,7 +98,7 @@ class DefaultHttpRetryStrategyTest {
     }
 
     @Test
-    void testFailed_hideFailedWithUnexpectedStatusCode() {
+    void testFailed_DisplayErrorWithUnexpectedStatusCode() {
         var request = new HttpRequest("http://test.com", "GET");
         var retryStrategy = new DefaultHttpRetryStrategy()
                 .setFailedAtRetriesExhausted(true);
