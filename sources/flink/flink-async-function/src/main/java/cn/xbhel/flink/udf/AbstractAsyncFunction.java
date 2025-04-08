@@ -71,29 +71,34 @@ public abstract class AbstractAsyncFunction<IN, OUT> extends RichAsyncFunction<I
 
     @Override
     public void asyncInvoke(IN input, ResultFuture<OUT> resultFuture) throws Exception {
-        CompletableFuture.<Tuple2<OUT, Throwable>>supplyAsync(() -> {
-            try {
-                return Tuple2.of(invoke(input), null);
-            } catch (Exception exception) {
-                // hold the exception instead of throw it in order to avoid the error is wrapped
-                // to CompletionException by CompletableFuture.
-                return Tuple2.of(null, exception);
-            }
-        }, executorService).whenComplete((result, ex) -> {
-            var error = ex;
-            // the result may be null (such as the executorService shutdown/crash)
-            if (result != null) {
-                // use f1 != null because the invoke(input) may return null.
-                if (result.f1 == null) {
-                    onSuccess(input, result.f0, resultFuture);
-                    return;
+        try {
+            CompletableFuture.<Tuple2<OUT, Throwable>>supplyAsync(() -> {
+                try {
+                    return Tuple2.of(invoke(input), null);
+                } catch (Exception exception) {
+                    // hold the exception instead of throw it in order to avoid the error is wrapped
+                    // to CompletionException by CompletableFuture.
+                    return Tuple2.of(null, exception);
                 }
-                error = result.f1;
-            }
+            }, executorService).whenComplete((result, ex) -> {
+                var error = ex;
+                // the result may be null (such as the executorService shutdown/crash)
+                if (result != null) {
+                    // use f1 != null because the invoke(input) may return null.
+                    if (result.f1 == null) {
+                        onSuccess(input, result.f0, resultFuture);
+                        return;
+                    }
+                    error = result.f1;
+                }
 
+                errorCounter.inc();
+                onError(input, error, resultFuture);
+            });
+        } catch (Exception exception) {
             errorCounter.inc();
-            onError(input, error, resultFuture);
-        });
+            onError(input, exception, resultFuture);
+        }
     }
 
     protected void onSuccess(IN input, OUT result, ResultFuture<OUT> resultFuture) {
@@ -138,8 +143,8 @@ public abstract class AbstractAsyncFunction<IN, OUT> extends RichAsyncFunction<I
                     executorService.shutdownNow();
                 }
                 // Keep waiting
-                // while (!executorService.awaitTermination(terminationTimeout.toMillis(), // NOSONAR
-                // TimeUnit.MILLISECONDS)) {} 
+                // while (!executorService.awaitTermination( // NOSONAR
+                // terminationTimeout.toMillis(), TimeUnit.MILLISECONDS)) {}
             } catch (InterruptedException e) {
                 // (Re-)Cancel if current thread also interrupted
                 executorService.shutdownNow();

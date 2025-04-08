@@ -1,26 +1,6 @@
 package cn.xbhel.flink.udf;
 
-import static org.apache.flink.streaming.api.datastream.AsyncDataStream.OutputMode.UNORDERED;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
-import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.mockStatic;
-import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-
-import java.io.Serial;
-import java.time.Duration;
-import java.util.ArrayDeque;
-import java.util.List;
-import java.util.Objects;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeoutException;
-
+import lombok.RequiredArgsConstructor;
 import org.apache.flink.api.common.functions.RuntimeContext;
 import org.apache.flink.api.common.typeutils.base.IntSerializer;
 import org.apache.flink.configuration.Configuration;
@@ -38,7 +18,17 @@ import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import lombok.RequiredArgsConstructor;
+import java.io.Serial;
+import java.time.Duration;
+import java.util.ArrayDeque;
+import java.util.List;
+import java.util.Objects;
+import java.util.concurrent.*;
+
+import static org.apache.flink.streaming.api.datastream.AsyncDataStream.OutputMode.UNORDERED;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class AbstractAsyncFunctionTest {
@@ -156,7 +146,60 @@ class AbstractAsyncFunctionTest {
             assertThat(asyncFunction.errorCounter.getCount()).isEqualTo(1);
             assertThat(testHarness.getOutput()).isEmpty();
         }
+    }
 
+    @Test
+    void testFailedExecutionWithExecutorServiceError() throws Exception {
+        var timeout = 10;
+        var spyExecutorService = spy(Executors.newFixedThreadPool(5));
+        var asyncFunction = new TestAsyncFunction(x -> x);
+        asyncFunction.setExecutorServiceFactory(() -> spyExecutorService);
+        doThrow(RuntimeException.class).when(spyExecutorService).execute(any(Runnable.class));
+
+        try (var testHarness = new OneInputStreamOperatorTestHarness<>(
+                new AsyncWaitOperatorFactory<>(asyncFunction, timeout, 2, UNORDERED),
+                IntSerializer.INSTANCE)) {
+            var mockEnvironment = testHarness.getEnvironment();
+            mockEnvironment.setExpectedExternalFailureCause(Throwable.class);
+            testHarness.open();
+
+            testHarness.processElement(new StreamRecord<>(1, 1));
+
+            testHarness.endInput();
+
+            assertThat(mockEnvironment.getActualExternalFailureCause()).isPresent();
+            assertThat(asyncFunction.errorCounter.getCount()).isEqualTo(1);
+            var throwable = ExceptionUtils.findThrowable(
+                    mockEnvironment.getActualExternalFailureCause().get(), RuntimeException.class);
+            assertThat(throwable).isPresent();
+            assertThat(testHarness.getOutput()).isEmpty();
+        }
+    }
+
+    @Test
+    void testFailedExecutionWithExecutorServiceErrorWithLogFailureOnly() throws Exception {
+        var timeout = 10;
+        var spyExecutorService = spy(Executors.newFixedThreadPool(1));
+        var asyncFunction = new TestAsyncFunction(x -> x);
+        asyncFunction.setLogFailureOnly(true);
+        asyncFunction.setExecutorServiceFactory(() -> spyExecutorService);
+        doThrow(RuntimeException.class).when(spyExecutorService).execute(any(Runnable.class));
+
+        try (var testHarness = new OneInputStreamOperatorTestHarness<>(
+                new AsyncWaitOperatorFactory<>(asyncFunction, timeout, 2, UNORDERED),
+                IntSerializer.INSTANCE)) {
+            var mockEnvironment = testHarness.getEnvironment();
+            mockEnvironment.setExpectedExternalFailureCause(Throwable.class);
+            testHarness.open();
+
+            testHarness.processElement(new StreamRecord<>(1, 1));
+
+            testHarness.endInput();
+
+            assertThat(mockEnvironment.getActualExternalFailureCause()).isEmpty();
+            assertThat(asyncFunction.errorCounter.getCount()).isEqualTo(1);
+            assertThat(testHarness.getOutput()).isEmpty();
+        }
     }
 
     @Test
@@ -300,6 +343,19 @@ class AbstractAsyncFunctionTest {
         verify(mockResultFuture, times(2)).complete(resultCaptor.capture());
         assertThat(resultCaptor.getAllValues()).containsExactlyInAnyOrder(
                 List.of(2), List.of(4));
+    }
+
+    @Test
+    void testGracefulShutdownWithInterruptedException() throws Exception {
+        var asyncFunction = spy(new TestAsyncFunction(x -> x));
+        var spyExecutorService = spy(Executors.newFixedThreadPool(5));
+        asyncFunction.setExecutorServiceFactory(() -> spyExecutorService);
+        doReturn(mock(RuntimeContext.class, RETURNS_DEEP_STUBS)).when(asyncFunction).getRuntimeContext();
+        asyncFunction.open(new Configuration());
+        doThrow(InterruptedException.class).when(spyExecutorService).awaitTermination(anyLong(), eq(TimeUnit.MILLISECONDS));
+        asyncFunction.close();
+        assertThat(AbstractAsyncFunction.executorService.isShutdown()).isTrue();
+        assertThat(Thread.currentThread().isInterrupted()).isTrue();
     }
 
     @Test
