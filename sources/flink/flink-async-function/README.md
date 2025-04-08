@@ -1,9 +1,12 @@
 # Flink Async Function
 
 ## References
-- [Flink Async I/O](https://nightlies.apache.org/flink/flink-docs-master/docs/dev/datastream/operators/asyncio/)
 
-## What is the purpose of the project? 
+- [Flink Async I/O](https://nightlies.apache.org/flink/flink-docs-master/docs/dev/datastream/operators/asyncio/)
+- [Initialization of static variables in Flink](https://lists.apache.org/thread/5z8wzym6t9jp41xdymh5bx940dswtfkn)
+
+
+## What is the purpose of the project?
 
 - How to use the Async Function provided by Flink?
 - How is the Async Function implemented with retry and timeout semantics?

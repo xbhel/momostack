@@ -10,13 +10,13 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.metrics.Counter;
 import org.apache.flink.metrics.ThreadSafeSimpleCounter;
 import org.apache.flink.shaded.netty4.io.netty.util.concurrent.DefaultThreadFactory;
 import org.apache.flink.streaming.api.functions.async.ResultFuture;
 import org.apache.flink.streaming.api.functions.async.RichAsyncFunction;
-import org.apache.flink.types.Either;
 import org.apache.flink.util.function.SerializableSupplier;
 
 import lombok.Setter;
@@ -39,6 +39,8 @@ public abstract class AbstractAsyncFunction<IN, OUT> extends RichAsyncFunction<I
     static ExecutorService executorService;
 
     @Setter
+    private int threadNum = Math.max(1, Runtime.getRuntime().availableProcessors() * 2);
+    @Setter
     private Duration terminationTimeout = Duration.ofMinutes(1);
     @Setter
     private boolean logFailureOnly = false;
@@ -50,12 +52,12 @@ public abstract class AbstractAsyncFunction<IN, OUT> extends RichAsyncFunction<I
     @Override
     public void open(Configuration parameters) throws Exception {
         super.open(parameters);
+        // Singleton ExecutorService
         synchronized (AbstractAsyncFunction.class) {
             if (counter == 0) {
-                var poolSize = Math.max(1, Runtime.getRuntime().availableProcessors() * 2);
                 executorService = Optional.ofNullable(executorServiceFactory)
                         .map(SerializableSupplier::get)
-                        .orElseGet(() -> Executors.newFixedThreadPool(poolSize,
+                        .orElseGet(() -> Executors.newFixedThreadPool(threadNum,
                                 new DefaultThreadFactory("asyncThreadPool")));
             }
             counter++;
@@ -69,22 +71,24 @@ public abstract class AbstractAsyncFunction<IN, OUT> extends RichAsyncFunction<I
 
     @Override
     public void asyncInvoke(IN input, ResultFuture<OUT> resultFuture) throws Exception {
-        CompletableFuture.<Either<OUT, Throwable>>supplyAsync(() -> {
+        CompletableFuture.<Tuple2<OUT, Throwable>>supplyAsync(() -> {
             try {
-                return Either.Left(invoke(input));
+                return Tuple2.of(invoke(input), null);
             } catch (Exception exception) {
-                // hold the exception instead of throw it because
-                return Either.Right(exception);
+                // hold the exception instead of throw it in order to avoid the error is wrapped
+                // to CompletionException by CompletableFuture.
+                return Tuple2.of(null, exception);
             }
         }, executorService).whenComplete((result, ex) -> {
             var error = ex;
-
+            // the result may be null (such as the executorService shutdown/crash)
             if (result != null) {
-                if (result.isLeft()) {
-                    onSuccess(input, result.left(), resultFuture);
+                // use f1 != null because the invoke(input) may return null.
+                if (result.f1 == null) {
+                    onSuccess(input, result.f0, resultFuture);
                     return;
                 }
-                error = result.right();
+                error = result.f1;
             }
 
             errorCounter.inc();
@@ -108,7 +112,6 @@ public abstract class AbstractAsyncFunction<IN, OUT> extends RichAsyncFunction<I
 
     @Override
     public void timeout(IN input, ResultFuture<OUT> resultFuture) throws Exception {
-        log.error("Failed to execute [{}] due to async function call has timed out.", input);
         errorCounter.inc();
         onError(input, new TimeoutException("Async function call has timed out."), resultFuture);
     }
@@ -116,25 +119,32 @@ public abstract class AbstractAsyncFunction<IN, OUT> extends RichAsyncFunction<I
     @Override
     public void close() throws Exception {
         super.close();
-        // shuts down an ExecutorService in two phases, first by calling shutdown to
-        // reject incoming tasks, and then calling shutdownNow
         synchronized (AbstractAsyncFunction.class) {
             counter--;
-            if (counter == 0 && executorService != null) {
-                try {
-                    // Disable new tasks from being submitted
-                    executorService.shutdown();
-                    // Wait a while for existing tasks to terminate
-                    if (!executorService.awaitTermination(
-                            terminationTimeout.toMillis(), TimeUnit.MILLISECONDS)) {
-                        executorService.shutdownNow();
-                    }
-                } catch (InterruptedException interrupted) {
-                    // (Re-)Cancel if current thread also interrupted
+            if (counter == 0) {
+                gracefulShutdown();
+            }
+        }
+    }
+
+    protected void gracefulShutdown() {
+        // shuts down an ExecutorService in two phases, first by calling shutdown to
+        // reject incoming tasks, and then calling shutdownNow
+        if (executorService != null) {
+            // Disable new tasks from being submitted
+            executorService.shutdown();
+            try {
+                if (!executorService.awaitTermination(terminationTimeout.toMillis(), TimeUnit.MILLISECONDS)) {
                     executorService.shutdownNow();
-                    // Preserve interrupt status
-                    Thread.currentThread().interrupt();
                 }
+                // Keep waiting
+                // while (!executorService.awaitTermination(terminationTimeout.toMillis(), // NOSONAR
+                // TimeUnit.MILLISECONDS)) {} 
+            } catch (InterruptedException e) {
+                // (Re-)Cancel if current thread also interrupted
+                executorService.shutdownNow();
+                // Preserve interrupt status
+                Thread.currentThread().interrupt();
             }
         }
     }
