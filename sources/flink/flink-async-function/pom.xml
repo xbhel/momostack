@@ -11,6 +11,13 @@
     <packaging>jar</packaging>
 
     <name>flink-async-function</name>
+    <description>Using the Async Function provided by Flink</description>
+    <developers>
+        <developer>
+            <name>xbhel</name>
+            <email>xbhel@outlook.com</email>
+        </developer>
+    </developers>
 
     <properties>
         <java.version>17</java.version>

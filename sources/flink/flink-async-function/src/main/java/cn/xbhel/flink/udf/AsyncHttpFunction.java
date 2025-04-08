@@ -32,6 +32,8 @@ import lombok.Setter;
  * {@link AsyncRetryStrategy} to
  * handle retries based on the specific exception.</li>
  * </ol>
+ * 
+ * @author xbhel
  */
 public class AsyncHttpFunction<T extends HttpRequest, R> extends AbstractAsyncFunction<T, R> {
 

@@ -22,6 +22,9 @@ import org.apache.flink.util.function.SerializableSupplier;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 
+/**
+ * @author xbhel
+ */
 @Slf4j
 public abstract class AbstractAsyncFunction<IN, OUT> extends RichAsyncFunction<IN, OUT> {
 
