@@ -47,7 +47,6 @@ import org.apache.http.client.methods.RequestBuilder;
 import org.apache.http.client.protocol.HttpClientContext;
 import org.apache.http.entity.ByteArrayEntity;
 import org.apache.http.entity.FileEntity;
-import org.apache.http.entity.InputStreamEntity;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
@@ -250,7 +249,7 @@ class HttpClientTest {
     void testCreateEntity_InputStreamInput() throws IOException {
         InputStream inputStream = new ByteArrayInputStream("test".getBytes(StandardCharsets.UTF_8));
         HttpEntity entity = HttpClient.createEntity(inputStream, StandardCharsets.UTF_8, "application/octet-stream");
-        assertThat(entity).isInstanceOf(InputStreamEntity.class);
+        assertThat(entity).isInstanceOf(ByteArrayEntity.class);
     }
 
     @Test
@@ -423,11 +422,11 @@ class HttpClientTest {
         }
         var mockCloseableHttpResponse = mock(CloseableHttpResponse.class, RETURNS_DEEP_STUBS);
         when(mockCloseableHttpResponse.getStatusLine().getStatusCode()).thenReturn(400);
+        when(mockCloseableHttpResponse.getEntity()).thenReturn(null);
         when(closeableHttpClient.execute(any(HttpUriRequest.class), any(HttpContext.class)))
                 .thenReturn(mockCloseableHttpResponse);
         var request = new HttpRequest("http://example.com", "GET");
-        assertThrows(HttpExecutionException.class, () ->
-                httpClient.execute(request, HttpClientContext.create(), null));
+        assertThrows(HttpExecutionException.class, () -> httpClient.execute(request, HttpClientContext.create(), null));
     }
 
     @Test
@@ -451,6 +450,7 @@ class HttpClientTest {
         var mockCloseableHttpClient = mock(CloseableHttpClient.class);
         var mockCloseableHttpResponse = mock(CloseableHttpResponse.class, RETURNS_DEEP_STUBS);
         when(mockCloseableHttpResponse.getStatusLine().getStatusCode()).thenReturn(500);
+        when(mockCloseableHttpResponse.getEntity()).thenReturn(null);
         when(mockCloseableHttpClient.execute(any(HttpUriRequest.class), any(HttpContext.class)))
                 .thenReturn(mockCloseableHttpResponse);
         var spyHttpRetryStrategy = spy(new DefaultHttpRetryStrategy(3, 0.1).setFailedAtRetriesExhausted(false));

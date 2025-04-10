@@ -1,17 +1,19 @@
 package cn.xbhel.http;
 
-import lombok.RequiredArgsConstructor;
-import lombok.Setter;
-import lombok.experimental.Accessors;
-import org.apache.http.protocol.HttpContext;
-
-import javax.annotation.Nullable;
-import javax.net.ssl.SSLException;
 import java.io.IOException;
 import java.io.InterruptedIOException;
 import java.net.ConnectException;
 import java.net.UnknownHostException;
 import java.util.Set;
+
+import javax.annotation.Nullable;
+import javax.net.ssl.SSLException;
+
+import org.apache.http.protocol.HttpContext;
+
+import lombok.RequiredArgsConstructor;
+import lombok.Setter;
+import lombok.experimental.Accessors;
 
 /**
  * @author xbhel
@@ -31,12 +33,12 @@ public class DefaultHttpRetryStrategy implements HttpRetryStrategy {
             500 // Internal Server Error
     );
     private static final Set<Class<? extends Exception>> NO_RETRYABLE_IO_EXCEPTIONS = Set.of(
-        InterruptedIOException.class, 
-        UnknownHostException.class,
-        ConnectException.class, 
-        SSLException.class);
+            InterruptedIOException.class,
+            UnknownHostException.class,
+            ConnectException.class,
+            SSLException.class);
     private static final Set<Class<? extends Throwable>> DEFAULT_RETRYABLE_EXCEPTIONS = Set.of(IOException.class);
-    
+
     public static final DefaultHttpRetryStrategy INSTANCE = new DefaultHttpRetryStrategy();
 
     private final int maxAttempts;
@@ -68,9 +70,9 @@ public class DefaultHttpRetryStrategy implements HttpRetryStrategy {
                 return retryableStatusCodes.contains(statusCode);
             }
 
-            if(exception != null) {
+            if (exception != null) {
                 var isRetryableEx = retryableExceptions.stream().anyMatch(cls -> cls.isInstance(exception));
-                if(isRetryableEx && exception instanceof IOException) {
+                if (isRetryableEx && exception instanceof IOException) {
                     isRetryableEx = NO_RETRYABLE_IO_EXCEPTIONS.stream().noneMatch(cls -> cls.isInstance(exception));
                 }
                 return isRetryableEx;
@@ -89,8 +91,10 @@ public class DefaultHttpRetryStrategy implements HttpRetryStrategy {
             HttpContext context) throws Exception {
         HttpRetryStrategy.super.failed(request, statusCode, exception, context);
         if (failedAtRetriesExhausted && statusCode != null) {
-            throw new HttpExecutionException(
-                    "Failed to execute request [" + request + "] due to unexpected http status code " + statusCode);
+            var errorMessage = context.getAttribute(HttpUtils.ERROR_MESSAGE_ATTRIBUTE);
+            throw new HttpExecutionException(String.format(
+                    "Failed to execute request [%s] due to unexpected http status code %s, error: %s",
+                    request, statusCode, errorMessage));
         }
     }
 

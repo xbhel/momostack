@@ -1,5 +1,7 @@
 package cn.xbhel.http;
 
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 import java.io.IOException;
 import java.io.InterruptedIOException;
 import java.util.Set;
@@ -98,12 +100,27 @@ class DefaultHttpRetryStrategyTest {
     }
 
     @Test
-    void testFailed_DisplayErrorWithUnexpectedStatusCode() {
+    void testFailed_ErrorWithUnexpectedStatusCode() {
         var request = new HttpRequest("http://test.com", "GET");
         var retryStrategy = new DefaultHttpRetryStrategy()
                 .setFailedAtRetriesExhausted(true);
         Assertions.assertThrows(HttpExecutionException.class,
                 () -> retryStrategy.failed(request, 500, null, HttpClientContext.create()));
+    }
+
+    @Test
+    void testFailed_ErrorWithUnexpectedStatusCodeAndMessage() {
+        var request = new HttpRequest("http://test.com", "GET");
+        var retryStrategy = new DefaultHttpRetryStrategy()
+                .setFailedAtRetriesExhausted(true);
+        var context = HttpClientContext.create();
+        context.setAttribute(HttpUtils.ERROR_MESSAGE_ATTRIBUTE, "internal server error");
+
+        assertThatThrownBy(() -> retryStrategy.failed(request, 500, null, context))
+                .isInstanceOf(HttpExecutionException.class)
+                .hasMessage(String.format(
+                        "Failed to execute request [%s] due to unexpected http status code %s, error: %s",
+                        request, 500, "internal server error"));
     }
 
     @Test

@@ -143,13 +143,13 @@ public class HttpClient implements Closeable {
         // The HttpContext allows storing custom attributes that can be accessed
         // throughout the request execution lifecycle
         var context = HttpClientContext.create();
-        context.setAttribute("request-id", UUID.randomUUID().toString());
+        context.setAttribute(HttpUtils.REQUEST_ID_ATTRIBUTE, UUID.randomUUID().toString());
         return this.execute(request, context, null);
     }
 
     public CloseableHttpResponse execute(HttpRequest request, RequestConfig requestConfig) throws Exception {
         var context = HttpClientContext.create();
-        context.setAttribute("request-id", UUID.randomUUID().toString());
+        context.setAttribute(HttpUtils.REQUEST_ID_ATTRIBUTE, UUID.randomUUID().toString());
         return this.execute(request, context, requestConfig);
     }
 
@@ -181,6 +181,7 @@ public class HttpClient implements Closeable {
                 log.warn("Request failed for {}. Retrying attempt #{} after {} ms delay", request, attempts, delay);
                 TimeUnit.MILLISECONDS.sleep(delay);
             }
+            context.setAttribute(HttpUtils.ERROR_MESSAGE_ATTRIBUTE, holder.consumeResponseAsString());
             retryStrategy.failed(request, holder.statusCode, holder.exception, context);
         } catch (Exception e) {
             // Close failed response that is required in order to reuse the underlying
@@ -284,6 +285,13 @@ public class HttpClient implements Closeable {
             var holder = new ResponseHolder();
             holder.exception = lastException;
             return holder;
+        }
+
+        String consumeResponseAsString() throws IOException {
+            if (response != null && response.getEntity() != null) {
+                return EntityUtils.toString(response.getEntity());
+            }
+            return null;
         }
 
         boolean isSuccessful() {

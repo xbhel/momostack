@@ -1,12 +1,16 @@
 package cn.xbhel.http;
 
-import org.apache.http.HttpResponse;
-import org.apache.http.util.EntityUtils;
-
 import java.io.IOException;
 import java.util.Arrays;
 
+import org.apache.http.HttpResponse;
+import org.apache.http.util.EntityUtils;
+
 public final class HttpUtils {
+
+    public static final String ERROR_MESSAGE_ATTRIBUTE = "error-message";
+    public static final String REQUEST_ID_ATTRIBUTE = "request-id";
+
     private HttpUtils() {
     }
 
@@ -22,4 +26,5 @@ public final class HttpUtils {
                     statusCode, errorMessage));
         }
     }
+
 }
