@@ -176,9 +176,30 @@ pronounce, utter, emit, issue, provide, host, administer, furnish, confer, besto
 grab, seize, grasp, clutch, transport, haul, remove, withdraw, abstract, extract, capture, arrest, endure, undertake,
 adopt, derive, collect, subscribe, record, scribble, measure, accommodate, quote.
 
+
+## Preposition
+
+1. My hand was cut on a piece of glass.
+2. Lily look at me in surprise.
+3. She stood on one foot.
+4. The price increased by 10%.
+5. She is eating food from the hotel.
+6. I picked up my sister from school.
+7. His hands were numb with cold.
+8. Don't talk with food in your mouth.
+9. Let's drink to your new job.
+
+### off & over
+
+
 ## Vocabulary
 
 ### Verb
+
+- cheque
+- look through
+- rip
+
 
 ***have:***
 
