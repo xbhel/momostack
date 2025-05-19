@@ -1,6 +1,8 @@
 package cn.xbhel.http;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.io.InterruptedIOException;
@@ -103,7 +105,7 @@ class DefaultHttpRetryStrategyTest {
     void testFailed_ErrorWithUnexpectedStatusCode() {
         var request = new HttpRequest("http://test.com", "GET");
         var retryStrategy = new DefaultHttpRetryStrategy()
-                .setFailedAtRetriesExhausted(true);
+                .setFailedIfRetriesExhausted(true);
         Assertions.assertThrows(HttpExecutionException.class,
                 () -> retryStrategy.failed(request, 500, null, HttpClientContext.create()));
     }
@@ -112,7 +114,7 @@ class DefaultHttpRetryStrategyTest {
     void testFailed_ErrorWithUnexpectedStatusCodeAndMessage() {
         var request = new HttpRequest("http://test.com", "GET");
         var retryStrategy = new DefaultHttpRetryStrategy()
-                .setFailedAtRetriesExhausted(true);
+                .setFailedIfRetriesExhausted(true);
         var context = HttpClientContext.create();
         context.setAttribute(HttpUtils.ERROR_MESSAGE_ATTRIBUTE, "internal server error");
 
@@ -129,6 +131,46 @@ class DefaultHttpRetryStrategyTest {
         Assertions.assertEquals(200, retryStrategy.getBackoffTimeMillis(1));
         Assertions.assertEquals(400, retryStrategy.getBackoffTimeMillis(2));
         Assertions.assertEquals(800, retryStrategy.getBackoffTimeMillis(3));
+    }
+
+    @Test
+    void testIsRetryable_withCustomNonRetryableExceptions() {
+        var retryStrategy = new DefaultHttpRetryStrategy(3, 0.1)
+                .setNonRetryableExceptions(Set.of(RuntimeException.class));
+        var retryable = retryStrategy.isRetryable(1, null, new IllegalStateException("test"),
+                HttpClientContext.create());
+        assertFalse(retryable);
+    }
+
+    @Test
+    void testIsRetryable_withMatchingOrder_exceptionsIsPriorToStatusCodes() {
+        var retryStrategy = new DefaultHttpRetryStrategy(3, 0.1)
+                .setNonRetryableExceptions(Set.of(RuntimeException.class));
+        var retryable = retryStrategy.isRetryable(1, 429, new IllegalStateException("test"),
+                HttpClientContext.create());
+        assertFalse(retryable);
+    }
+
+    @Test
+    void testIsRetryable_withMatchingOrder_nonRetryableExceptionsIsPriorToRetryableExceptions() {
+        var retryStrategy = new DefaultHttpRetryStrategy(3, 0.1)
+                .setNonRetryableExceptions(Set.of(IllegalArgumentException.class))
+                .setRetryableExceptions(Set.of(RuntimeException.class));
+        var illegalArg = retryStrategy.isRetryable(1, null, new IllegalArgumentException("test"),
+                HttpClientContext.create());
+        assertFalse(illegalArg);
+        var illegalState = retryStrategy.isRetryable(1, null, new IllegalStateException("test"),
+                HttpClientContext.create());
+        assertTrue(illegalState);
+    }
+
+    @Test
+    void testIsRetryable_withoutStatusCodesAndExceptions() {
+        var retryStrategy = new DefaultHttpRetryStrategy(3, 0.1)
+                .setNonRetryableExceptions(Set.of(IllegalArgumentException.class))
+                .setRetryableExceptions(Set.of(RuntimeException.class));
+        var retryable = retryStrategy.isRetryable(1, null, null, HttpClientContext.create());
+        assertFalse(retryable);
     }
 
 }

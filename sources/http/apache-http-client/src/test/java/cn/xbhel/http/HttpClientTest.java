@@ -417,7 +417,7 @@ class HttpClientTest {
         try (var httpClientBuilderStatic = mockStatic(HttpClientBuilder.class)) {
             httpClientBuilderStatic.when(HttpClientBuilder::create).thenReturn(mockHttpClientBuilder);
             httpClient = builder()
-                    .retryStrategy(new DefaultHttpRetryStrategy().setFailedAtRetriesExhausted(true))
+                    .retryStrategy(new DefaultHttpRetryStrategy().setFailedIfRetriesExhausted(true))
                     .build();
         }
         var mockCloseableHttpResponse = mock(CloseableHttpResponse.class, RETURNS_DEEP_STUBS);
@@ -453,7 +453,7 @@ class HttpClientTest {
         when(mockCloseableHttpResponse.getEntity()).thenReturn(null);
         when(mockCloseableHttpClient.execute(any(HttpUriRequest.class), any(HttpContext.class)))
                 .thenReturn(mockCloseableHttpResponse);
-        var spyHttpRetryStrategy = spy(new DefaultHttpRetryStrategy(3, 0.1).setFailedAtRetriesExhausted(false));
+        var spyHttpRetryStrategy = spy(new DefaultHttpRetryStrategy(3, 0.1).setFailedIfRetriesExhausted(false));
         var httpClient = new HttpClient(mockCloseableHttpClient, spyHttpRetryStrategy);
         var responseHolder = spy(HttpClient.ResponseHolder.withResponse(mockCloseableHttpResponse));
         try (var responseHolderStatic = mockStatic(HttpClient.ResponseHolder.class)) {

@@ -107,3 +107,14 @@ var httpClient = HttpClientBuilder
 - [HttpComponents-client-4.5.x Logging Practices](https://hc.apache.org/httpcomponents-client-4.5.x/logging.html)
 
 Being a library HttpClient is not to dictate which logging framework the user has to use. Therefore HttpClient utilizes the logging interface provided by the Commons Logging package.
+
+
+## Http Wrapper
+
+### Http Retry Strategies
+
+- supports retrying by status code.
+- supports retrying by exception.
+- supports retrying by excluding non-retryable exception. 
+
+1 > 3 > 2
