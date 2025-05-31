@@ -1,4 +1,4 @@
-## Intro
+**## Intro
 
 ### Pick the bigger one
 
@@ -208,3 +208,16 @@ bad 不只是坏的意思。
             - She never spared herself in the pursuit of excellence.
 
 - curse
+
+- clean vs clear
+    - clear: To remove things so that something is empty or unobstructed.
+    - clean: To remove dirt or stains so that something is not dirty.
+    - Usage in common phrases:
+        - | Phrase                | Meaning                                | 
+          | --------------------- | -------------------------------------- |
+          | Clear your desk       | Remove everything from your desk       |
+          | Clean your desk       | Wipe and sanitize the desk             |
+          | Clear the road        | Remove obstacles from the road         |
+          | Clean the road        | Wash or sweep the road                 |
+          | Clear your mind       | Remove stress or distracting thoughts  |
+          | Clean your conscience | Make yourself feel morally right again |

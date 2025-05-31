@@ -1,0 +1,17 @@
+micronaut:
+  application:
+    default-charset: UTF-8
+    name: micronaut-example
+  server:
+    port: 8080
+    context-path: /api
+    netty:
+      access-logger:
+        enabled: true
+        logger-name: HTTP_ACCESS_LOGGER
+    multipart:
+      max-file-size: 10485760 # 10M
+  netty:
+    event-loops:
+      default:
+        num-threads: ${netty.thread.num:40}

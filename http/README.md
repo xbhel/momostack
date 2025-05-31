@@ -108,13 +108,12 @@ var httpClient = HttpClientBuilder
 
 Being a library HttpClient is not to dictate which logging framework the user has to use. Therefore HttpClient utilizes the logging interface provided by the Commons Logging package.
 
+>✨ Ensure the common-logging version is >= 1.3.0. Prior to this version, common-logging defaulted to using JDK Logger and did not automatically check the classpath for other Logger providers (such as Log4J). However, in most current applications, developers prefer using SLF4J + Log4J/LogBack. Starting from version 1.3.0, it automatically checks the classpath for other Logger providers.
 
 ## Http Wrapper
 
 ### Http Retry Strategies
 
-- supports retrying by status code.
+- supports retrying by excluding non-retry-able exception. 
 - supports retrying by exception.
-- supports retrying by excluding non-retryable exception. 
-
-1 > 3 > 2
+- supports retrying by status code.
