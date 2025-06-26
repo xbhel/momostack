@@ -10,3 +10,6 @@
 - https://github.com/nuysoft/Mock
 - https://github.com/databrickslabs/dbldatagen
 - https://databrickslabs.github.io/dbldatagen/public_docs/index.html
+- https://chancejs.com/
+- annotation inspectioner like microaunt to generate methods
+- https://github.com/ForteScarlet/Mock.java

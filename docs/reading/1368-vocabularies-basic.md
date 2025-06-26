@@ -213,7 +213,7 @@ bad 不只是坏的意思。
     - clear: To remove things so that something is empty or unobstructed.
     - clean: To remove dirt or stains so that something is not dirty.
     - Usage in common phrases:
-        - | Phrase                | Meaning                                | 
+        - | Phrase                | Meaning                                |     
           | --------------------- | -------------------------------------- |
           | Clear your desk       | Remove everything from your desk       |
           | Clean your desk       | Wipe and sanitize the desk             |
@@ -221,3 +221,6 @@ bad 不只是坏的意思。
           | Clean the road        | Wash or sweep the road                 |
           | Clear your mind       | Remove stress or distracting thoughts  |
           | Clean your conscience | Make yourself feel morally right again |
+
+- augment
+- boilerplate
