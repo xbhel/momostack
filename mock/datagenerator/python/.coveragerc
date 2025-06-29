@@ -1,0 +1,14 @@
+[run]
+# Omitting third-party libraries or certain paths from coverage
+omit = */venv/*,
+       */site-packages/*,
+       */tests/unit/*.py,
+       */setup.py,
+       */__init__.py
+
+
+[report]
+# Files to omit in the coverage report
+exclude_also = 
+    # Don't report coverage for 'if __name__ == "__main__"'
+    if __name == .__main__.:

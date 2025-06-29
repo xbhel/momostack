@@ -5,10 +5,10 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>cn.xbhel</groupId>
-    <artifactId>jdbc-dsl</artifactId>
+    <artifactId>jdbc-dsl-annotation-processor</artifactId>
     <version>1.0.0-SNAPSHOT</version>
 
-    <name>jdbc-dsl</name>
+    <name>jdbc-dsl-annotation-processor</name>
     <description>A fluent JDBC library with DSL support for Java</description>
     <developers>
         <developer>
