@@ -30,7 +30,7 @@ Useful links:
 ```bash
 # Set up a virtual environment (optional but recommended)
 python3 -m venv .venv
-ssh .venv/Scripts/activate & source .venv/Scripts/activate
+sh .venv/Scripts/activate & source .venv/Scripts/activate
 
 # Install dependencies
 pip install -r requirements.txt
@@ -197,7 +197,7 @@ Example: If `country = CN`, then `language = Chinese`.
 You can express this using inline SQL-like syntax:
 
 ```sql
-"language": "select 'Chinese' from $ where country = 'CN'"
+"language": "select case when $.country='CN' then 'Chinese' else 'English' from $ where $.country = 'CN'"
 ```
 
 > 💡 $ refers to the current record being generated.

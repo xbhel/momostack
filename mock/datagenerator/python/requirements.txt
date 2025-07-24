@@ -3,3 +3,4 @@ orjson~=3.10.0
 jmespath==1.0.1
 wrapt==1.15.0
 six==1.16.0
+faker==37.4.0

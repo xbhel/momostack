@@ -1,0 +1,70 @@
+{
+    "name": {
+        "type": "string",
+        "description": "The name of the user",
+        "required": true
+    },
+    "email": {
+        "type": "string",
+        "description": "The email of the user",
+        "required": true
+    },
+    "age": {
+        "type": "number",
+        "description": "The age of the user",
+        "required": true
+    },
+    "is_active": {
+        "type": "boolean",
+        "description": "Whether the user is active",
+        "required": true
+    },
+    "gender": {
+        "type": "enum",
+        "description": "The gender of the user",
+        "required": true,
+        "values": ["male", "female"]
+    },
+    "phone": {
+        "type": "string",
+        "description": "The phone number of the user",
+        "required": true
+    },
+    "address": {
+        "type":  "object",
+        "description": "The address of the user",
+        "required": true,
+        "properties": {
+            "street": {
+                "type":  "string",
+                "description": "The street of the user",
+                "required": true
+            },
+            "city": {
+                "type": "string",
+                "description": "The city of the user",
+                "required": true
+            },
+            "state": {
+                "type": "string",
+                "description": "The state of the user",
+                "required": true
+            },
+            "zip": {
+                "type": "string",
+                "description": "The zip code of the user",
+                "required": true
+            }
+        }
+    },
+    "created_at": {
+        "type": "string",
+        "description": "The date and time the user was created",
+        "required": true
+    },
+    "updated_at": {
+        "type": "string",
+        "description": "The date and time the user was updated",
+        "required": true
+    }
+}
