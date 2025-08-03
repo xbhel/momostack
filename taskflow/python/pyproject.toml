@@ -1,5 +1,62 @@
 [project]
 name = "taskflow"
 version = "1.0.0"
+requires-python = ">=3.12"
 dependencies = [
 ]
+
+[dependency-groups]
+dev = [
+    "coverage==7.6.12",
+    "mypy>=1.17.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests/unit"]
+filterwarnings = [
+    "error",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["src", "tests"]
+
+[tool.coverage.paths]
+source = ["src"]
+
+[tool.coverage.report]
+exclude_also = [
+    "if t.TYPE_CHECKING",
+    "raise NotImplementedError",
+    ": \\.{3}",
+]
+
+[tool.mypy]
+python_version = "3.12"
+files = ["src"]
+show_error_codes = true
+pretty = true
+strict = true
+
+[tool.ruff]
+src = ["src"]
+fix = true
+show-fixes = true
+output-format = "full"
+
+[tool.ruff.lint]
+select = [
+    "B",  # flake8-bugbear
+    "E",  # pycodestyle error
+    "F",  # pyflakes
+    "I",  # isort
+    "UP",  # pyupgrade
+    "W",  # pycodestyle warning
+]
+ignore = [
+    "UP038",  # keep isinstance tuple
+]
+
+[tool.ruff.lint.isort]
+force-single-line = true
+order-by-type = false

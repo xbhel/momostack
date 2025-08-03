@@ -1,7 +1,9 @@
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Any, Callable, Dict, List, Optional
 from dataclasses import dataclass, field
+from typing import Any, Callable, Dict, List, Optional, TypeVar
+
+_T = TypeVar("_T")
 
 
 @dataclass
@@ -13,7 +15,7 @@ class Task:
     status: str = field(default="created", init=False)
     result: Any = field(default=None, init=False)
 
-    def __post__init__(self):
+    def __post_init__(self):
         self.name = self.name or self.func.__name__
 
     def run(self, ctx: Dict[str, Any]) -> Any:
@@ -29,16 +31,22 @@ class TaskExecutor:
 
     def add_task(self, task: Task):
         task_name = task.name
+        if task_name is None:
+            raise ValueError("Task name cannot be None")
         if task_name in self.tasks:
             raise ValueError(f"Task '{task_name}' already exists.")
+
+        missing_tasks = [t for t in task.depends_on if t not in self.tasks]
+        if missing_tasks:
+            raise ValueError(f"Missing tasks: {','.join(missing_tasks)}")
 
         self.tasks[task_name] = task
         for x in task.depends_on:
             self.task_graph[x].append(task_name)
             self.task_reversed_graph[task_name].append(x)
 
-    def run(self):
-        context = {}
+    def run(self) -> Dict[str, Any]:
+        context: Dict[str, Any] = {}
         completed_tasks = set()
         pending_tasks = set(self._topological_sort())
 
@@ -57,13 +65,13 @@ class TaskExecutor:
                     context[task_name] = future.result()
                     completed_tasks.add(task_name)
                     pending_tasks.remove(task_name)
-            
+
         return context
 
-    def _topological_sort(self):
+    def _topological_sort(self) -> List[str]:
         """
         Perform a topological sort on a DAG (Directed Acyclic Graph) of tasks:
-        - nodes = tasks
+        - vertices = tasks
         - edges = dependencies
         """
         visited, order = set(), []
@@ -88,25 +96,30 @@ class TaskExecutor:
 #       /
 # B ————|
 
+
 def a(ctx):
     print(ctx)
-    return 'a'
+    return "a"
+
 
 def b(ctx):
     print(ctx)
-    return 'b'
+    return "b"
+
 
 def c(ctx):
     print(ctx)
-    return 'c'
+    return "c"
+
 
 def d(ctx):
     print(ctx)
-    return 'd'
+    return "d"
+
 
 task_executor = TaskExecutor()
 task_executor.add_task(Task(a, name="a"))
 task_executor.add_task(Task(b, name="b"))
-task_executor.add_task(Task(c, name="c", depends_on=['a','b']))
-task_executor.add_task(Task(d, name="d", depends_on=['c']))
+task_executor.add_task(Task(c, name="c", depends_on=["a", "b"]))
+task_executor.add_task(Task(d, name="d", depends_on=["c"]))
 task_executor.run()

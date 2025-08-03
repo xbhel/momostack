@@ -25,6 +25,9 @@ Using uv (Recommended):
 ```bash
 uv sync
 uv run main.py
+
+# prod
+uv sync --no-dev
 ```
 
 or Using pip + virtual environment:
@@ -35,6 +38,7 @@ sh .venv/Scripts/activate # or .venv/bin/activate on Windows
 source .venv/Scripts/activate
 pip install -e .
 python main.py
+pip install ".[dev]"
 ```
 
 ## 🧠 Architecture (POC v1)
@@ -87,3 +91,7 @@ python main.py
     ]
     }
     ```
+
+## Useful links
+
+- [networkx](https://networkx.org/documentation/latest/tutorial.html)
