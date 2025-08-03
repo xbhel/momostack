@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
 
 import java.util.Arrays;
+import java.util.List;
 import java.util.function.BiFunction;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
@@ -33,5 +34,12 @@ public class EqualsExpressionParser<T> implements ConditionExpressionParser<T> {
             var value = fieldExtractor.apply(fieldName, event);
             return value != null && expectedValues.contains(value.toString());
         };
+    }
+
+    @Override
+    public List<String> parseFields(String conditionExpression) {
+        ensureSupported("equals", conditionExpression);
+        var fieldAndValues = conditionExpression.split(EQ_CONDITION_SEPARATOR);
+        return List.of(fieldAndValues[0].trim());
     }
 }

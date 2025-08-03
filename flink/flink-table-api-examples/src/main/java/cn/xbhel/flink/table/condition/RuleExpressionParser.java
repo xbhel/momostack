@@ -3,6 +3,7 @@ package cn.xbhel.flink.table.condition;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.function.Predicate;
@@ -15,6 +16,7 @@ public class RuleExpressionParser<T> {
 
     public Rule<T> parseRuleExpression(String ruleExpression) {
         var conditionExpressions = ruleExpression.split(CONDITION_SEPARATOR);
+        var definedFields = new ArrayList<String>();
         var conditions = new LinkedHashMap<String, Predicate<T>>(conditionExpressions.length);
         for (var conditionExpression : conditionExpressions) {
             conditionExpression = conditionExpression.trim();
@@ -23,8 +25,9 @@ public class RuleExpressionParser<T> {
             }
             var parser = findFirstConditionParser(conditionExpression);
             conditions.put(conditionExpression, parser.parseCondition(conditionExpression));
+            definedFields.addAll(parser.parseFields(conditionExpression));
         }
-        return new Rule<>(ruleExpression, conditions);
+        return new Rule<>(ruleExpression, conditions, definedFields);
     }
 
     protected ConditionExpressionParser<T> findFirstConditionParser(String conditionExpression) {

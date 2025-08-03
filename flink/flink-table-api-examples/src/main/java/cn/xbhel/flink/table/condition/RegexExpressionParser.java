@@ -3,6 +3,7 @@ package cn.xbhel.flink.table.condition;
 import lombok.RequiredArgsConstructor;
 import org.apache.flink.util.Preconditions;
 
+import java.util.List;
 import java.util.function.BiFunction;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
@@ -32,5 +33,14 @@ public class RegexExpressionParser<T> implements ConditionExpressionParser<T> {
             return compiledPattern.matcher(value).matches();
         };
     }
+
+    @Override
+    public List<String> parseFields(String conditionExpression) {
+        ensureSupported("regex", conditionExpression);
+        var matcher = PATTERN.matcher(conditionExpression);
+        Preconditions.checkState(matcher.matches());
+        return List.of(matcher.group(1).trim());
+    }
+
 
 }
