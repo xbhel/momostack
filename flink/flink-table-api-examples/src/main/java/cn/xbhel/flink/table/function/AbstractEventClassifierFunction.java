@@ -21,6 +21,7 @@ public abstract class AbstractEventClassifierFunction extends ProcessFunction<Ro
 
     @Serial
     private static final long serialVersionUID = 1723284669432551554L;
+
     private final RowType rowType;
     private transient Map<String, Classifier> eventClassifiers;
 
@@ -28,24 +29,30 @@ public abstract class AbstractEventClassifierFunction extends ProcessFunction<Ro
     public void open(Configuration parameters) throws Exception {
         super.open(parameters);
         var fieldExtractor = createFieldExtractor();
-        this.eventClassifiers = parseEventClassifiers(new HashMap<>(),
-                new RuleExpressionParser<>(List.of(
-                        new NonNullExpressionParser<>(fieldExtractor),
-                        new EqualsExpressionParser<>(fieldExtractor),
-                        new RegexExpressionParser<>(fieldExtractor)
-                )));
+        var ruleExpressionParser = new RuleExpressionParser<>(List.of(
+                new NonNullExpressionParser<>(fieldExtractor),
+                new EqualsExpressionParser<>(fieldExtractor),
+                new RegexExpressionParser<>(fieldExtractor)
+        ));
+        this.eventClassifiers = parseEventClassifiers(new HashMap<>(), ruleExpressionParser);
     }
 
     @Override
     public void processElement(RowData event,
                                ProcessFunction<RowData, RowData>.Context ctx,
                                Collector<RowData> out) throws Exception {
-        for (Map.Entry<String, Classifier> entry : this.eventClassifiers.entrySet()) {
-            var classifier = entry.getValue();
-            if (classifier.anyMatch(event)) {
-                processClassifierEvent(entry.getKey(), event, ctx, out);
-            } else {
-                processUnknownEvent(event, ctx, out);
+        var matchedClassifiers = this.eventClassifiers
+                .entrySet()
+                .stream()
+                .filter(entry -> entry.getValue().anyMatch(event))
+                .map(Map.Entry::getKey)
+                .toList();
+
+        if (matchedClassifiers.isEmpty()) {
+            processUnknownEvent(event, ctx, out);
+        } else {
+            for (var classifier : matchedClassifiers) {
+                processClassifierEvent(classifier, event, ctx, out);
             }
         }
     }
@@ -59,6 +66,15 @@ public abstract class AbstractEventClassifierFunction extends ProcessFunction<Ro
                                                 ProcessFunction<RowData, RowData>.Context ctx,
                                                 Collector<RowData> out) throws Exception;
 
+
+    BiFunction<String, RowData, Object> createFieldExtractor() {
+        Map<String, RowData.FieldGetter> fieldGetterMap = rowType.getFields().stream()
+                .collect(Collectors.toMap(RowType.RowField::getName, rowField ->
+                        RowData.createFieldGetter(rowField.getType(),
+                                rowType.getFieldIndex(rowField.getName()))));
+        return (fieldName, row) -> fieldGetterMap.get(fieldName).getFieldOrNull(row);
+    }
+
     @SuppressWarnings("unchecked")
     Map<String, Classifier> parseEventClassifiers(Map<String, Object> conf, RuleExpressionParser<RowData> parser) {
         return conf.entrySet().stream().map(entry -> {
@@ -68,14 +84,6 @@ public abstract class AbstractEventClassifierFunction extends ProcessFunction<Ro
                     .toList();
             return new Classifier(entry.getKey(), rules);
         }).collect(Collectors.toMap(Classifier::eventName, Function.identity()));
-    }
-
-    BiFunction<String, RowData, Object> createFieldExtractor() {
-        Map<String, RowData.FieldGetter> fieldGetterMap = rowType.getFields().stream()
-                .collect(Collectors.toMap(RowType.RowField::getName, rowField ->
-                        RowData.createFieldGetter(rowField.getType(),
-                                rowType.getFieldIndex(rowField.getName()))));
-        return (fieldName, row) -> fieldGetterMap.get(fieldName).getFieldOrNull(row);
     }
 
     record Classifier(String eventName, List<Rule<RowData>> rules) {
