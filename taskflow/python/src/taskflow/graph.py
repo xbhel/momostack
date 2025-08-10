@@ -1,15 +1,12 @@
-import sys
-import os
-from collections import defaultdict
 from collections import deque
+from typing import Generic, TypeVar
 
-print(sys.path)
-print(os.getenv("A"))
+from .exceptions import CycleDetectedException
 
-from taskflow.exceptions import GraphCycleDetectedError
+T = TypeVar("T")
 
 
-class SimpleGraph[T]:
+class SimpleGraph(Generic[T]):
     """
     A basic directed graph implementation using adjacency lists.
     """
@@ -18,8 +15,8 @@ class SimpleGraph[T]:
         """
         Initializes an empty directed graph.
         """
-        self._adj: dict[T, list[T]] = defaultdict(list)
-        self._reverse_adj: dict[T, list[T]] = defaultdict(list)
+        self._adj: dict[T, list[T]] = {}
+        self._reverse_adj: dict[T, list[T]] = {}
 
     def add_vertex(self, vertex: T) -> None:
         """
@@ -42,21 +39,27 @@ class SimpleGraph[T]:
 
     def neighbors(self, vertex: T) -> list[T]:
         """
-        Returns a list of vertices directly reachable from the given vertex (outgoing edges).
-        Returns an empty list if the vertex is not in the graph or has no outgoing edges.
+        Returns a list of vertices directly reachable from the given vertex
+        (outgoing edges).
+
+        Returns an empty list if the vertex is not in the graph or has no
+        outgoing edges.
         """
         return self._adj.get(vertex, [])
 
     def successors(self, vertex: T) -> list[T]:
         """
-        Alias for neighbors(), returns a list of vertices directly reachable from the given vertex.
+        Alias for neighbors(), returns a list of vertices directly reachable from
+        the given vertex.
         """
         return self.neighbors(vertex)
 
     def predecessors(self, vertex: T) -> list[T]:
         """
-        Returns a list of vertices that have direct edges to the given vertex (incoming edges).
-        Returns an empty list if the vertex is not in the graph or has no incoming edges.
+        Returns a list of vertices that have direct edges to the given vertex
+        (incoming edges).
+        Returns an empty list if the vertex is not in the graph or has no
+        incoming edges.
         """
         return self._reverse_adj.get(vertex, [])
 
@@ -69,7 +72,8 @@ class SimpleGraph[T]:
 
     def edges(self) -> list[tuple[T, T]]:
         """
-        Returns a list of all directed edges in the graph as (from_vertex, to_vertex) tuples.
+        Returns a list of all directed edges in the graph as (from_vertex, to_vertex)
+         tuples.
         """
         return [(f, t) for f in self._adj for t in self._adj[f]]
 
@@ -94,8 +98,9 @@ class SimpleGraph[T]:
         # Kahn's algorithm
         # Important: Create a *copy* of in_degree to avoid modifying the graph's state
         # if the same graph instance is used for multiple topological_sort calls.
-        # Also, ensure all vertices in _adj are accounted for in in_degree, even if their
-        # initial in_degree is 0 and they are not keys in _reverse_adj (e.g., source nodes).
+        # Also, ensure all vertices in _adj are accounted for in in_degree,
+        # even if their initial in_degree is 0 and they are not keys in _reverse_adj
+        # (e.g., source nodes).
         in_degree = {v: len(pres) for v, pres in self._reverse_adj.items()}
         queue = deque([v for v in self._adj if in_degree[v] == 0])
 
@@ -113,48 +118,34 @@ class SimpleGraph[T]:
                     queue.append(neighbor)
 
         # If the number of processed vertices is less than the total number of vertices,
-        # it means there's a cycle (or disconnected components that are part of a cycle).
+        # it means there's a cycle (or disconnected components that are part of a cycle)
         if visited_count != len(self._adj):
-            raise GraphCycleDetectedError(
+            raise CycleDetectedException(
                 "Graph contains a cycle, topological sort is not possible."
             )
 
         return order
 
     def has_cycle(self) -> bool:
-        try:
-            self.topological_sort()
-        except GraphCycleDetectedError:
-            return True
-        return False
+        visited: set[T] = set()
+        recursion_stack: set[T] = set()
 
-    def get_vertex_levels(self) -> dict[int, list[T]]:
-        in_degree = {v: len(pres) for v, pres in self._reverse_adj.items()}
-        queue = deque([v for v in self._adj if in_degree.get(v, 0) == 0])
+        def dfs(vertex: T) -> bool:
+            if vertex in recursion_stack:
+                return True
+            if vertex in visited:
+                return False
 
-        # BFS level traversal
-        level = 0
-        levels = defaultdict(list)
-        while queue:
-            for _ in range(len(queue)):
-                vertex = queue.popleft()
-                levels[level].append(vertex)
-                for neighbor in self._adj[vertex]:
-                    in_degree[neighbor] -= 1
-                    if in_degree[neighbor] == 0:
-                        queue.append(neighbor)
-            level += 1
+            visited.add(vertex)
+            recursion_stack.add(vertex)
+            for neighbor in self._adj[vertex]:
+                if dfs(neighbor):
+                    return True
+            recursion_stack.remove(vertex)
+            return False
 
-        return levels
+        return any(dfs(vertex) for vertex in self._adj)
 
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__}(vertices={self.vertices()}, edges={self.edges()})"
-
-
-if __name__ == "__main__":
-    graph: SimpleGraph[str] = SimpleGraph()
-    graph.add_edge("taska", "taskc")
-    graph.add_edge("taskb", "taskc")
-    print(graph.vertices())
-    print(graph.edges())
-    print(graph.topological_sort())
+        cls_name = self.__class__.__name__
+        return f"{cls_name}(vertices={self.vertices()}, edges={self.edges()})"
