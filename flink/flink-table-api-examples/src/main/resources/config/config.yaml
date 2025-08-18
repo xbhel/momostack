@@ -1,0 +1,10 @@
+event:
+  classifiers:
+    start:
+      rules:
+        cc: nonnull(start_time)&feature=loader&service=prod&regex(field,"^(?!.*_2$).*")
+
+rules:
+  - name: xx
+    age:
+      text: 12

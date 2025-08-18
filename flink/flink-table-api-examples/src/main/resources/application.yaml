@@ -1,4 +1,0 @@
-eventClassifiers:
-  start:
-    rules:
-      cc: nonnull(start_time)&feature=loader&service=prod&regex(field,"^(?!.*_2$).*")

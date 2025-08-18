@@ -24,10 +24,6 @@ public class SlaCalculatorService {
     private final LocalDateTime availableLatestDataTime;
     private final Duration windowSize;
 
-    public void run() {
-
-
-    }
 
     Map<String, Tuple2<LocalDateTime, LocalDateTime>> getSlaViolationWindows(Map<String, String> sysWithSlaMap) {
         return sysWithSlaMap.entrySet()
@@ -78,12 +74,5 @@ public class SlaCalculatorService {
         return "";
     }
 
-    public static void main(String[] args) {
-        System.out.println(alignToHourWithOffset(LocalDateTime.now().minus(Duration.ofMinutes(1)), 0, TimeUnit.MINUTES));
-        Tuple2<LocalDateTime, LocalDateTime> violationWindow = calculateSlaViolationWindow(LocalDateTime.now(), Duration.ofMinutes(10), Duration.ofHours(1));
-        System.out.println(violationWindow);
-        System.out.println(isInWindow(Timestamp.valueOf(LocalDateTime.of(2025, 8, 4, 22, 10)), violationWindow));
-
-    }
 
 }

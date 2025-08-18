@@ -15,6 +15,10 @@ public class RuleExpressionParser<T> {
     private final List<ConditionExpressionParser<T>> conditionParsers;
 
     public Rule<T> parseRuleExpression(String ruleExpression) {
+        return parseRuleExpression(null, ruleExpression);
+    }
+
+    public Rule<T> parseRuleExpression(String ruleName, String ruleExpression) {
         var conditionExpressions = ruleExpression.split(CONDITION_SEPARATOR);
         var definedFields = new ArrayList<String>();
         var conditions = new LinkedHashMap<String, Predicate<T>>(conditionExpressions.length);
@@ -27,7 +31,7 @@ public class RuleExpressionParser<T> {
             conditions.put(conditionExpression, parser.parseCondition(conditionExpression));
             definedFields.addAll(parser.parseFields(conditionExpression));
         }
-        return new Rule<>(ruleExpression, conditions, definedFields);
+        return new Rule<>(ruleName, ruleExpression, conditions, definedFields);
     }
 
     protected ConditionExpressionParser<T> findFirstConditionParser(String conditionExpression) {
