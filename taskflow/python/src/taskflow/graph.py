@@ -3,10 +3,13 @@ from typing import Generic, TypeVar
 
 from .exceptions import CycleDetectedException
 
-T = TypeVar("T")
+__author__ = "xbhel"
 
 
-class SimpleGraph(Generic[T]):
+_T = TypeVar("_T")
+
+
+class SimpleGraph(Generic[_T]):
     """
     A basic directed graph implementation using adjacency lists.
     """
@@ -15,17 +18,17 @@ class SimpleGraph(Generic[T]):
         """
         Initializes an empty directed graph.
         """
-        self._adj: dict[T, list[T]] = {}
-        self._reverse_adj: dict[T, list[T]] = {}
+        self._adj: dict[_T, list[_T]] = {}
+        self._reverse_adj: dict[_T, list[_T]] = {}
 
-    def add_vertex(self, vertex: T) -> None:
+    def add_vertex(self, vertex: _T) -> None:
         """
         Adds a vertex to the graph if it doesn't already exist.
         """
         self._adj.setdefault(vertex, [])
         self._reverse_adj.setdefault(vertex, [])
 
-    def add_edge(self, from_vertex: T, to_vertex: T) -> None:
+    def add_edge(self, from_vertex: _T, to_vertex: _T) -> None:
         """
         Adds a directed edge from 'from_vertex' to 'to_vertex'.
         Automatically adds vertices if they don't exist.
@@ -37,7 +40,7 @@ class SimpleGraph(Generic[T]):
             self._adj[from_vertex].append(to_vertex)
             self._reverse_adj[to_vertex].append(from_vertex)
 
-    def neighbors(self, vertex: T) -> list[T]:
+    def neighbors(self, vertex: _T) -> list[_T]:
         """
         Returns a list of vertices directly reachable from the given vertex
         (outgoing edges).
@@ -47,14 +50,14 @@ class SimpleGraph(Generic[T]):
         """
         return self._adj.get(vertex, [])
 
-    def successors(self, vertex: T) -> list[T]:
+    def successors(self, vertex: _T) -> list[_T]:
         """
         Alias for neighbors(), returns a list of vertices directly reachable from
         the given vertex.
         """
         return self.neighbors(vertex)
 
-    def predecessors(self, vertex: T) -> list[T]:
+    def predecessors(self, vertex: _T) -> list[_T]:
         """
         Returns a list of vertices that have direct edges to the given vertex
         (incoming edges).
@@ -63,33 +66,33 @@ class SimpleGraph(Generic[T]):
         """
         return self._reverse_adj.get(vertex, [])
 
-    def vertices(self) -> list[T]:
+    def vertices(self) -> list[_T]:
         """
         Returns a list of all unique vertices in the graph.
-        The order is not guaranteed.
+        _The order is not guaranteed.
         """
         return list(self._adj.keys())
 
-    def edges(self) -> list[tuple[T, T]]:
+    def edges(self) -> list[tuple[_T, _T]]:
         """
         Returns a list of all directed edges in the graph as (from_vertex, to_vertex)
          tuples.
         """
         return [(f, t) for f in self._adj for t in self._adj[f]]
 
-    def has_vertex(self, vertex: T) -> bool:
+    def has_vertex(self, vertex: _T) -> bool:
         """
         Checks if a given vertex exists in the graph.
         """
         return vertex in self._adj
 
-    def has_edge(self, from_vertex: T, to_vertex: T) -> bool:
+    def has_edge(self, from_vertex: _T, to_vertex: _T) -> bool:
         """
         Checks if a directed edge exists from 'from_vertex' to 'to_vertex'.
         """
         return self.has_vertex(from_vertex) and to_vertex in self._adj[from_vertex]
 
-    def topological_sort(self) -> list[T]:
+    def topological_sort(self) -> list[_T]:
         """
         Performs a topological sort on the graph.
         Returns a list of vertices in topological order.
@@ -127,10 +130,10 @@ class SimpleGraph(Generic[T]):
         return order
 
     def has_cycle(self) -> bool:
-        visited: set[T] = set()
-        recursion_stack: set[T] = set()
+        visited: set[_T] = set()
+        recursion_stack: set[_T] = set()
 
-        def dfs(vertex: T) -> bool:
+        def dfs(vertex: _T) -> bool:
             if vertex in recursion_stack:
                 return True
             if vertex in visited:

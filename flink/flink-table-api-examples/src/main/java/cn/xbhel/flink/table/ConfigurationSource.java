@@ -67,9 +67,9 @@ public class ConfigurationSource {
         return load(propertiesMap);
     }
 
-    public ConfigurationSource mergeWith(ConfigurationSource configurationSource) {
-        MAPPER.readerForUpdating(this.rootNode)
-                .readVa
+    public ConfigurationSource mergeWith(ConfigurationSource configurationSource) throws IOException {
+        return new ConfigurationSource(MAPPER.readerForUpdating(this.rootNode)
+                .readValue(configurationSource.rootNode));
     }
 
     public <T> T get(String configOptionName, TypeReference<T> type) {

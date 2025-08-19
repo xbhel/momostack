@@ -84,7 +84,7 @@ class TaskExecutor:
                         self.tasks[task_name].status = TaskStatus.COMPLETED
                     except Exception:
                         self.tasks[task_name].status = TaskStatus.FAILED
-                        # add a flag to enable fast-fail or not
+                        # TODO add a flag to enable fast-fail or not
                         raise
 
                     completed.add(task_name)

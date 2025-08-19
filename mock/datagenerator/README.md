@@ -20,7 +20,7 @@ Useful links:
   - JSON Schema Generator
     - [jsonschema-generator](https://github.com/victools/jsonschema-generator)
     - [Pydantic - Generates schemas from Python models based on Python 3.6+ type hints.](https://github.com/pydantic/pydantic)
-    - [json-schema-inferrer - Data to Schema]****(https://github.com/saasquatch/json-schema-inferrer)
+    - [json-schema-inferrer - Data to Schema](https://github.com/saasquatch/json-schema-inferrer)
   - JSON Schema Validator
     - [jsonschema](https://github.com/python-jsonschema/jsonschema)
 - [JSON Schema Data Types](https://json-schema.org/understanding-json-schema/reference/type)
