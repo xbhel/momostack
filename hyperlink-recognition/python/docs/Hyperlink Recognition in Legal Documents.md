@@ -22,7 +22,7 @@ Currently, these references exist as plain text, requiring manual lookup and int
 
 ## High-Level Workflow
 
-1. Rule-Based Extraction of Potential References and Contextual Attributes
+1. Rule-Based Extraction of Potential References and relevant Contextual Attributes
 
     - Scan the document for potential references (titles, case numbers, abbreviations, statutes, etc.)
     - Extract associated contextual attributes, including promulgators, issue numbers, and issue dates.
@@ -58,7 +58,7 @@ Currently, these references exist as plain text, requiring manual lookup and int
 
 ```mermaid
 flowchart TD
-    A[Start: Receive Document] --> B[Rule-Based Extraction of Potential References<br>and Contextual Attributes]
+    A[Start: Receive Document] --> B[Rule-Based Extraction of Potential References<br>and relevant Contextual Attributes]
     B --> C[Dependency Resolution and Context Association]
     C --> D[Reference Text Normalization]
     D --> E[Backend Validation]
@@ -75,7 +75,7 @@ flowchart TD
 > [!Tip] Internally, both references and reference attributes are treated uniformly as entities, because they are all extracted from text based on configurable rules. Using a generic Entity structure allows for a unified representation and simplifies processing, while still preserving metadata for later validation and linking.
 
 - **Input**: a paragraph of text (smallest semantic unit)
-- **Output**: a list of potential references with metadata, e.g.:
+- **Output**: a list of potential entity with metadata, e.g.:
 
 ```json
 [
@@ -125,18 +125,18 @@ class Extractor(ABC):
 
 ### Supported Extraction Rules
 
-- **Symbol-based Extraction**: Extract references enclosed in special paired symbols (e.g., 《...》).
+- **Symbol-based Extraction**: Extract entities enclosed in special paired symbols (e.g., 《...》).
 
-- **Keyword-based Extraction**: Extract references using a predefined list of keywords. Any occurrence of these keywords is treated as a potential reference.
+- **Keyword-based Extraction**: Extract entities using a predefined list of keywords. Any occurrence of these keywords is treated as an entity.
 
-- **Dynamic keyword Extraction**: Extract keywords defined within the document itself. The keyword list is dynamically updated, and subsequent text is scanned again based on the updated list. For example, abbreviations defined in the document are treated as potential references.
+- **Dynamic keyword Extraction**: Extract keywords defined within the document itself. The keyword list is dynamically updated, and subsequent text is scanned again based on the updated list. For example, abbreviations defined in the document are treated as entities.
 
-- **Regex-Based Extraction**: Use fixed patterns to extract structured references and their attributes- such as case numbers, article numbers, issue numbers, and dates.
+- **Regex-Based Extraction**: Use fixed patterns to extract structured entities - such as case numbers, article numbers, issue numbers, and dates.
 
 **Rule Application by Scenario**
 
-| scenarios      | type      | Detection Rule               |
-| -------------- | --------- | ---------------------------- |
+| scenarios      | category  | Detection Rule              |
+| -------------- | --------- | --------------------------- |
 | Law Title      | Reference | Symbol & Keyword extraction |
 | Case Number    | Reference | Regex extraction            |
 | Abbreviation   | Reference | Dynamic keyword extraction  |
@@ -148,7 +148,7 @@ class Extractor(ABC):
 
 ### Symbol-based Extraction
 
-Detect text enclosed within paired symbols (e.g., 《...》) in a given text, with support for configurable handling of nested symbols:
+Extract text enclosed within paired symbols (e.g., 《...》) in a given text, with support for configurable handling of nested symbols:
 
   - Outermost only: keep the widest enclosing pair and ignore inner ones.
   - Innermost only: keep the deepest enclosed pair and ignore outer ones.
