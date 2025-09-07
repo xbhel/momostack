@@ -138,3 +138,60 @@ flowchart LR
     V --> U
     U --> O
 ```
+
+## Future Improvements / Advanced Extraction (MCP / LLM)
+
+**Goal:** Enhance the Hyperlink Recognition system by incorporating large language model (LLM) capabilities for complex or ambiguous references that are difficult to capture with rule-based extractors alone.
+
+**Planned Approach:**
+
+- **LLM-Based Extractor (MCP Service)**
+  - Design a microservice to handle ambiguous or context-heavy text segments.
+  - Use pretrained LLMs (e.g., ChatGPT, DeepSeek) to identify potential references and their attributes.
+  - Return results in a standardized entity format, consistent with rule-based extractors.
+
+- **Integration with Rule-Based Extractors**
+  - Provide a unified interface in the Hyperlink Recognition Service to merge entities extracted by rules and LLM.
+  - Implement confidence scoring or prioritization: e.g., use rule-based results when high-confidence, LLM for low-confidence/ambiguous cases.
+
+- **Potential Benefits**
+  - Capture references that are missed by static rules.
+  - Handle natural language variations and document-specific abbreviations.
+  - Enable continuous improvement by retraining or fine-tuning the LLM using feedback from the validation service.
+
+- **Implementation Considerations**
+  - Define clear API for the LLM extractor service, with input as text segments and output as structured Entity objects.
+  - Ensure asynchronous or batch processing to maintain system scalability.
+  - Logging, auditing, and monitoring for LLM outputs to allow validation and quality control.
+
+
+```mermaid
+flowchart LR
+    subgraph HRS["Hyperlink Recognition Service (Lambda)"]
+        F["Fetch Document<br>from DataLake"]
+        R["Rule-based Extractor"]
+        LLM["LLM-Based Extractor (Future)"]
+        M["Merge & Deduplicate Entities"]
+        V["Call Validation Service"]
+        U["Send Enriched Doc to DataLake API"]
+    end
+
+    subgraph VS["Validation Service<br>(API Gateway + Lambda)"]
+        Q["Query DynamoDB Reference Store"]
+    end
+
+    subgraph DL["Document Update Service (DataLake)"]
+        O["Objects in S3 (object_id as unique key)"]
+    end
+
+    %% Flows
+    F --> R
+    F --> LLM
+    R --> M
+    LLM --> M
+    M --> V
+    V --> Q
+    V --> U
+    U --> O
+
+```

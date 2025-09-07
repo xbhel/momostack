@@ -58,7 +58,7 @@ Currently, these references exist as plain text, requiring manual lookup and int
 
 ```mermaid
 flowchart TD
-    A[Start: Receive Document] --> B[Rule-Based Extraction of Potential References<br>and relevant Contextual Attributes]
+    A[Start: Receive Document From DataLake] --> B[Rule-Based Extractor]
     B --> C[Dependency Resolution and Context Association]
     C --> D[Reference Text Normalization]
     D --> E[Backend Validation]
@@ -66,6 +66,34 @@ flowchart TD
     F --> G[Hyperlink Markup Generation]
     G --> H[Document Update]
     H --> I[End: Document Enriched with Hyperlinks]
+```
+
+### TBD - Improvement
+
+```mermaid
+flowchart TD
+    A[SQS Event: New Document] --> B[Hyperlink Recognition Lambda]
+
+    B --> C[Fetch Document from DataLake【S3】]
+    C --> D[Rule-Based Extractor]
+    D --> E[Entities from Rules]
+
+    D --> F[Check for Unresolved Text/Complex References?]
+    F -- Yes --> G[LLM-Based Extractor【MCP Service】]
+    G --> H[Entities from LLM]
+    F -- No --> I[Skip LLM]
+
+    E --> J[Merge Entities]
+    H --> J
+    I --> J
+
+    J --> K[Dependency Resolution & Context Association]
+    K --> L[Reference Text Normalization]
+    L --> M[Backend Validation Service【REST API】]
+    M --> N[Unique Version Resolution]
+    N --> O[Generate Hyperlink Markup]
+    O --> P[Update Document via DataLake API]
+    P --> Q[Document Updated in S3]
 ```
 
 ## Rule-Based Entity Extraction Engine
