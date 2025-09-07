@@ -57,7 +57,7 @@ Currently, these references exist as plain text, requiring manual lookup and int
 
 
 ```mermaid
-flowchart TD
+flowchart LR
     A[Start: Receive Document From DataLake] --> B[Rule-Based Extractor]
     B --> C[Dependency Resolution and Context Association]
     C --> D[Reference Text Normalization]
@@ -68,10 +68,10 @@ flowchart TD
     H --> I[End: Document Enriched with Hyperlinks]
 ```
 
-### TBD - Improvement
+### Future Improvements / Advanced Extraction (MCP / LLM)
 
 ```mermaid
-flowchart TD
+flowchart LR
     A[SQS Event: New Document] --> B[Hyperlink Recognition Lambda]
 
     B --> C[Fetch Document from DataLake【S3】]
