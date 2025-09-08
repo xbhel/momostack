@@ -313,7 +313,7 @@ class RegexBasedExtractor(Extractor):
 ```
 
 
-### Extraction Pipeline
+### Workflow
 
 **Pipeline Overview**
 
@@ -342,18 +342,18 @@ flowchart LR
 
 **Rule Application by Scenario**
 
-| scenarios        | category  | Detection Rule              |
-| ---------------- | --------- | --------------------------- |
-| Law Title        | Reference | Symbol & Keyword extraction |
-| This Law(该法)   | Reference | Keyword extraction          |
-| Hereof(本法)     | Reference | Keyword extraction          |
-| Case Number      | Reference | Regex extraction            |
-| Abbreviation     | Reference | Dynamic keyword extraction  |
-| Article Number   | Reference | Regex extraction            |
-| Issue Number     | Attr      | Regex extraction            |
-| Issue Date       | Attr      | Regex extraction            |
-| Promulgator      | Attr      | Keyword extraction          |
-| Invalid Keywords | Other     | Keyword extraction          |
+| scenarios        | category  | Extraction Rule             | Priority |
+| ---------------- | --------- | --------------------------- | -------- |
+| Law Title        | Reference | Symbol & Keyword extraction | 1        |
+| This Law (该法)  | Reference | Keyword extraction          | 1        |
+| Hereof (本法)    | Reference | Keyword extraction          | 1        |
+| Case Number      | Reference | Regex extraction            | 1        |
+| Abbreviation     | Reference | Dynamic keyword extraction  | 2        |
+| Article Number   | Reference | Regex extraction            | 3        |
+| Issue Number     | Attr      | Regex extraction            | 3        |
+| Issue Date       | Attr      | Regex extraction            | 3        |
+| Promulgator      | Attr      | Keyword extraction          | 3        |
+| Invalid Keywords | Other     | Keyword extraction          | -        |
 
 
 ### Post-processing
@@ -380,8 +380,8 @@ Sometimes a keyword match is spurious because it occurs as a substring of a larg
 When multiple rules run in parallel, overlap conflicts may occur—two candidate entities share the same character span or one contains the other.
 
 **Resolution Strategy**
-  - Entity Type Priority: Law Titles > Abbreviations
   - Longest Match Priority: always prefer the longer span.
+  - Entity Type Priority: Law Titles > Abbreviations
 
 **Example: Abbreviation Overlap Case**
 
@@ -433,5 +433,135 @@ Final Extraction Output
     // "refersTo": "《2015年刑法修正案》"
   }
 ]
+```
 
+
+## Dependency Resolution and Context Association
+
+Entities extracted from the document may have dependencies or associations with other entities. For example, an Abbreviation depends on its corresponding Law Title, and an Article Number may depend on a Law Title or Abbreviation.
+
+
+| Entity Type         | Category  | Depends On                                         | Description of Association Logic                                                          |
+| ------------------- | --------- | -------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| **Law Title**       | Reference | Issue Date,<br>Issue Number,<br>Promulgator        | Issue Date: lookbehind & lookahead,<br>Issue Number: lookahead,<br>Promulgator: lookbehind. |
+| **This Law (该法)** | Reference | Law Title                                          | lookahead: find nearest following Law Title by entity index                              |
+| **Hereof (本法)**   | Reference | –                                                  | Implicit binding: associate with the primary Law Title of current document context        |
+| **Case Number**     | Reference | –                                                  | –                                                                                         |
+| **Abbreviation**    | Reference | Law Title                                          | lookahead: find nearest following Law Title by entity index                             |
+| **Article Number**  | Reference | Law Title,<br>This Law,<br>Hereof,<br>Abbreviation | lookahead: find nearest following reference by entity index                              |
+| **Issue Number**    | Attr      | –                                                  | –                                                                                         |
+| **Issue Date**      | Attr      | –                                                  | –                                                                                         |
+| **Promulgator**     | Attr      | –                                                  | –                                                                                         |
+
+
+### EntityAssociator Interface
+
+To handle these inter-entity relationships in a modular and extensible way, we introduce the EntityAssociator interface. Each entity type can have a specific implementation of EntityAssociator that defines how it resolves and associates with other dependent entities in the document.
+
+```python
+class EntityAssociator(ABC):
+    """
+    Interface for resolving and associating dependencies for a given entity.
+    Each entity type can implement a specific associator that defines
+    how it finds and links to related entities in the document.
+    """
+
+    @abstractmethod
+    def associate(self, entity: Entity, depends_on_entities: Iterable[Entity]) -> None:
+        """
+        Associate the given entity with its dependent entities.
+
+        :param entity: The entity whose dependencies are being resolved.
+        :param depends_on_entities: A collection of entities that the current entity may depend on.
+        :return: None. The entity's `attrs` or `refersTo` fields are updated in-place.
+        """
+        pass
+```
+  
+  - Each entity type (e.g., Law Title, Abbreviation, Article Number) will have its own associator implementation.
+  - The association logic (lookahead, lookbehind, regex, or custom rules) is encapsulated inside the implementation.
+
+This design allows each entity type to encapsulate its own dependency resolution logic, making the pipeline more maintainable and extensible as new entity types or association rules are added.
+
+**Data Structure Support**
+
+In our use case, the most commonly used algorithm for entity association is lookahead/lookbehind based on entity index.
+
+In Java, the built-in TreeMap is a natural fit for this requirement:
+
+- Use the entity index as the key, and the entity itself as the value.
+- Provides efficient nearest-neighbor lookup via floorEntry (lookbehind) and ceilingEntry (lookahead).
+- Ensures log-time complexity (O(log n)) for insertions and queries.
+
+In Python, however, there is no direct equivalent of TreeMap.
+To achieve similar functionality, we implemented a NavigableDict/IndexedLookupDict, a lightweight navigation dictionary built on `bisect` and `UserDict`.
+
+- Supports efficient nearest-neighbor lookup by entity index.
+- Provides **read-only** guarantees to ensure consistent indexing during association.
+- Offers methods similar to TreeMap (floor, ceiling, prev, next) to simplify association logic.
+
+```python
+class IndexedLookupDict(UserDict, Generic[T]):
+    """
+    A read-only navigable dictionary for index-based entity lookup.
+    """
+    
+    def __setitem__(self, index: int, value: T) -> None:
+        raise TypeError("Not support operation")
+
+    def __delitem__(self, index: int) -> None:
+        raise TypeError("Not support operation")
+
+    def floor(self, index: int) -> T | None:
+        """
+        Returns the value associated with the greatest key <= the given key, or None if their so such key
+        """
+        pass
+    def ceiling(self, index: int) -> T | None:
+        """
+        Returns the value associated with the smallest key >= the given key, or None if their so such key
+        """
+        pass
+    def lower(self, index: int) -> T | None:
+        """
+        Returns the value associated with the greatest key < the given key, or None if their so such key
+        """
+        pass
+    def higher(self, index: int) -> T | None:
+        """
+        Returns the value associated with the smallest key > the given key, or None if their so such key
+        """
+        pass
+```
+
+This structure enables EntityAssociator implementations to efficiently resolve dependencies and establish associations based on entity positions within the text.
+
+
+###  Circular Dependency Considerations
+
+Dependencies between entities must be **acyclic** to ensure correct resolution and association.
+
+  - Rationale: Circular dependencies can lead to infinite loops or incorrect attribute linking during entity association.
+  - Future Enhancement: A cycle detection mechanism can be implemented using a Directed Acyclic Graph (DAG).
+
+    - Build a dependency graph where nodes represent entities and edges represent "depends-on" relationships.
+    - Detect cycles using graph traversal algorithms (e.g., DFS with backtracking).
+    - Fast-fail mechanism. If a cycle is found, raise an exception or error immediately, preventing further association.
+
+This ensures that EntityAssociator implementations can safely rely on acyclic dependencies when performing lookahead/lookbehind or other association strategies.
+
+### Workflow
+
+```mermaid
+flowchart LR
+    A[Start: Extracted Entities List] --> B[Build Dependency Graph]
+    B --> C[Check for Circular Dependencies]
+    C -->|No Cycle| D[For Each Entity]
+    C -->|Cycle Detected| E[Fast-Fail: Raise Exception]
+
+    D --> F[Identify Depends-On Entities]
+    F --> G[Apply EntityAssociator Implementation]
+    G --> H[Update Entity attrs / refersTo]
+    H --> I[Proceed to Next Entity / Post-Processing]
+    I --> J[End: All Entities Associated]
 ```
