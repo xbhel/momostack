@@ -383,7 +383,7 @@ When multiple rules run in parallel, overlap conflicts may occur—two candidate
   - Entity Type Priority: Law Titles > Abbreviations
   - Longest Match Priority: always prefer the longer span.
 
-Example: Abbreviation Overlap Case
+**Example: Abbreviation Overlap Case**
 
 ```
 根据《中华人民共和国刑法》（以下简称为 “刑法”）和《2015年刑法修正案》（以下简称为 “2015刑法”），本案裁定如下。
@@ -402,3 +402,36 @@ Extraction Logic:
 - Overlap Handling
   - Conflict: 刑法 vs. 2015刑法 (substring overlap)
   - Correct resolution: keep the longer abbreviation (2015刑法) to avoid splitting it into 2015 + 刑法.
+
+Final Extraction Output
+
+```json
+[
+  {
+    "text": "《中华人民共和国刑法》",
+    "start": 2,
+    "end": 16,
+    "entity_type": "Title"
+  },
+  {
+    "text": "《2015年刑法修正案》",
+    "start": 21,
+    "end": 48,
+    "entity_type": "Title"
+  },
+  {
+    "text": "刑法",
+    "start": 52,
+    "end": 65,
+    "type": "Abbreviation",
+  },
+  {
+    "text": "2015刑法",
+    "start": 88,
+    "end": 104,
+    "type": "Abbreviation",
+    // "refersTo": "《2015年刑法修正案》"
+  }
+]
+
+```
