@@ -441,17 +441,17 @@ Final Extraction Output
 Entities extracted from the document may have dependencies or associations with other entities. For example, an Abbreviation depends on its corresponding Law Title, and an Article Number may depend on a Law Title or Abbreviation.
 
 
-| Entity Type         | Category  | Depends On                                         | Description of Association Logic                                                          |
-| ------------------- | --------- | -------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| Entity Type         | Category  | Depends On                                         | Description of Association Logic                                                            |
+| ------------------- | --------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------- |
 | **Law Title**       | Reference | Issue Date,<br>Issue Number,<br>Promulgator        | Issue Date: lookbehind & lookahead,<br>Issue Number: lookahead,<br>Promulgator: lookbehind. |
-| **This Law (该法)** | Reference | Law Title                                          | lookahead: find nearest following Law Title by entity index                              |
-| **Hereof (本法)**   | Reference | –                                                  | Implicit binding: associate with the primary Law Title of current document context        |
-| **Case Number**     | Reference | –                                                  | –                                                                                         |
-| **Abbreviation**    | Reference | Law Title                                          | lookahead: find nearest following Law Title by entity index                             |
-| **Article Number**  | Reference | Law Title,<br>This Law,<br>Hereof,<br>Abbreviation | lookahead: find nearest following reference by entity index                              |
-| **Issue Number**    | Attr      | –                                                  | –                                                                                         |
-| **Issue Date**      | Attr      | –                                                  | –                                                                                         |
-| **Promulgator**     | Attr      | –                                                  | –                                                                                         |
+| **This Law (该法)** | Reference | Law Title                                          | lookahead: find nearest following Law Title by entity index                                 |
+| **Hereof (本法)**   | Reference | –                                                  | Implicit binding: associate with the primary Law Title of current document context          |
+| **Case Number**     | Reference | –                                                  | –                                                                                           |
+| **Abbreviation**    | Reference | Law Title                                          | lookahead: find nearest following Law Title by entity index                                 |
+| **Article Number**  | Reference | Law Title,<br>This Law,<br>Hereof,<br>Abbreviation | lookahead: find nearest following reference by entity index                                 |
+| **Issue Number**    | Attr      | –                                                  | –                                                                                           |
+| **Issue Date**      | Attr      | –                                                  | –                                                                                           |
+| **Promulgator**     | Attr      | –                                                  | –                                                                                           |
 
 
 ### EntityAssociator Interface
@@ -565,3 +565,79 @@ flowchart LR
     H --> I[Proceed to Next Entity / Post-Processing]
     I --> J[End: All Entities Associated]
 ```
+
+
+## Reference Text Normalization
+
+The purpose of Reference Text Normalization is to transform extracted raw reference strings into a consistent, canonical format suitable for downstream processing. The input to this step comes from the Entity Extraction Engine, which extracts candidate reference texts from legal documents.
+
+Normalization is performed in two stages:
+1. General Text Normalization
+2. Type-Specific Normalization
+
+
+### General Text Normalization
+
+All extracted references, regardless of type, first undergo uniform text cleaning and formatting to ensure baseline consistency:
+
+- Whitespace removal: 
+  - Remove unnecessary spaces within or around the text.
+- Special Character Replacement
+- HTML entity Unescaping
+  - Converts HTML-encoded characters(e.g., `&amp;`, `&lt;`) back to original characters.
+- Full-width to half-width conversion
+  - Convert East Asian full-width characters (e.g., （, ）, Ａ, １) to their ASCII half-width equivalents ((, ), A, 1).
+
+The output of this stage ensure that the text is clean, consistent, and ready for further processing.
+
+
+### Reference-Type Specific Normalization
+
+After general cleaning, type-specific normalization rules are applied. These rules encapsulate domain knowledge of how legal references are typically expressed and how they should be standardized for reliable identification.
+
+
+#### Law Title Normalization
+
+The purpose of law title normalization is to extract the core term—the minimal expression that identifies a law—while removing optional prefixes, suffixes, or other decorative elements. This core term will serve as a key in a high-performance lookup service, enabling efficient retrieval and validation of legal references.
+
+>[!tip] The core term may not be strictly unique; different titles can occasionally share the same core term. However, the probability of collision is low, and any remaining ambiguity can be resolved using contextual attributes (e.g., promulgator, issue number, or issue date).
+
+
+##### Non-Nested Titles
+
+Most law titles follow a simple structure:
+```
+[Prefixes] (optional) + Core Term + [Suffixes] (optional)
+
+中华人民共和国刑法（2023年修正）
+=> [Prefix: 中华人民共和国] + [Core Term: 刑法] + [Suffix: （2023年修正）]
+```
+
+- Prefixes: phrases like “中华人民共和国” or the name/abbreviation of a promulgating authority.
+- Core Term: the essential part of the title, e.g., “刑法”.
+- Suffixes: version modifiers such as “（2023年修正）”.
+
+Normalization removes prefixes and suffixes, preserving only the core term as the lookup key.
+
+
+##### Nested Titles
+
+In more complex cases, a nested structure occurs, where the true law title is embedded inside another descriptive title. The general pattern is:
+
+```
+[Promulgators(A)] + [关于(B)] + [印发/发布/公布…(C)] + 《Law Title》(D) + [通知/命令/公告…(E)]
+```
+
+- A (optional): promulgator or its abbreviation
+- B (optional): the phrase “关于”
+- C (optional): action terms such as “印发”, “发布”, or “公布”
+- D (required): the embedded law title
+- E (optional): document type terms such as “通知”, “命令”, or “公告”
+
+Two valid forms are recognized as nested titles:
+- B, C, D required; A and E optional
+- D and E required; A, B, C optional
+
+In both cases, the normalization process extracts Part D (Law Title) and then applies the same non-nested normalization rules to derive the core term.
+
+#### Case Number Normalization
