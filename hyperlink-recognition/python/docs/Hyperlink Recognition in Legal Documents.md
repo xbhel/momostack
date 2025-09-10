@@ -19,7 +19,6 @@ Currently, these references exist as plain text, requiring manual lookup and int
 
 **Objective**: Build an automated Hyperlink Recognition system that detects references, validates their correctness, and converts them into interactive hyperlinks while ensuring accuracy and uniqueness.
 
-
 ## High-Level Workflow
 
 1. Retrieve the document from DataLake
@@ -58,7 +57,6 @@ Currently, these references exist as plain text, requiring manual lookup and int
 
    - Send back only enriched text nodes where entities were recognized.
    - The backend automatically handles persistence, versioning, and metadata management.
-
 
 ```mermaid
 flowchart LR
@@ -159,10 +157,9 @@ class Extractor(ABC):
 - **Dynamic keyword Extraction**: Extract entities defined dynamically in the document (e.g., abbreviations). The keyword list is dynamically updated, and subsequent text is scanned again based on the updated list.
 - **Regex-Based Extraction**: Extract structured entities such as case numbers, article numbers, issue numbers, and dates.
 
-
 #### Symbol Pair-based Extraction
 
-Extract entities enclosed within special paired symbols (e.g., 《...》). 
+Extract entities enclosed within special paired symbols (e.g., 《...》).
 
 This extractor is configurable with a set of symbol pairs, where each pair explicitly defines a left and right delimiter.
 
@@ -195,7 +192,7 @@ class SymbolBasedExtractor(Extractor):
 
 #### Keyword-based Extraction
 
-Extract entities using a predefined list of keywords. Any occurrence of these keywords is treated as an entity. 
+Extract entities using a predefined list of keywords. Any occurrence of these keywords is treated as an entity.
 
 This extractor is suitable for identifying references such as law promulgators, commonly used legal terms, or fixed phrases.
 
@@ -253,19 +250,19 @@ This extractor operates in multiple passes, first identifying potential keyword 
 **Algorithm Implementation**
 
 - Step 1: Identify new keyword definitions
-    - Use regex patterns (e.g., "简称为 xxx", "hereinafter referred to as xxx") to extract newly defined keywords.
-    - Update the dynamic keyword dictionary with discovered definitions and their valid scope (temporal and/or paragraph range).
+  - Use regex patterns (e.g., "简称为 xxx", "hereinafter referred to as xxx") to extract newly defined keywords.
+  - Update the dynamic keyword dictionary with discovered definitions and their valid scope (temporal and/or paragraph range).
 
 - Step 2: Multi-pattern keyword matching
-    - Use a Trie (prefix tree) or Aho-Corasick algorithm to match multiple keywords efficiently.
-    - Handles overlapping or nested keywords. Apply longest-match priority for conflict resolution.
+  - Use a Trie (prefix tree) or Aho-Corasick algorithm to match multiple keywords efficiently.
+  - Handles overlapping or nested keywords. Apply longest-match priority for conflict resolution.
 
 - Step 3: Post-processing
-    - Sort matches by length (longest first) and position.
-    - Resolve overlaps by keeping the longest valid match in each region.
+  - Sort matches by length (longest first) and position.
+  - Resolve overlaps by keeping the longest valid match in each region.
 
 - Step 4: Temporal validity
-    - Only consider keywords after they are defined; ignore occurrences before the definition.
+  - Only consider keywords after they are defined; ignore occurrences before the definition.
 
 ```python
 class DynamicKeywordExtractor(Extractor):
@@ -312,7 +309,6 @@ class RegexBasedExtractor(Extractor):
         ...
 ```
 
-
 ### Workflow
 
 **Pipeline Overview**
@@ -320,8 +316,8 @@ class RegexBasedExtractor(Extractor):
 - Input paragraph → all extractors applied in parallel
 - Merge extracted entities
 - Post-processing:
-    - Remove invalid keywords
-    - Resolve overlaps based on extractor priority and longest-match
+  - Remove invalid keywords
+  - Resolve overlaps based on extractor priority and longest-match
 - Output final list of entities
 
 ```mermaid
@@ -355,7 +351,6 @@ flowchart LR
 | Promulgator      | Attr      | Keyword extraction          | 3        |
 | Invalid Keywords | Other     | Keyword extraction          | -        |
 
-
 ### Post-processing
 
 After running multiple extraction rules in parallel, the results go through a unified post-processing stage to ensure correctness and consistency.
@@ -380,8 +375,9 @@ Sometimes a keyword match is spurious because it occurs as a substring of a larg
 When multiple rules run in parallel, overlap conflicts may occur—two candidate entities share the same character span or one contains the other.
 
 **Resolution Strategy**
-  - Longest Match Priority: always prefer the longer span.
-  - Entity Type Priority: Law Titles > Abbreviations
+
+- Longest Match Priority: always prefer the longer span.
+- Entity Type Priority: Law Titles > Abbreviations
 
 **Example: Abbreviation Overlap Case**
 
@@ -435,11 +431,9 @@ Final Extraction Output
 ]
 ```
 
-
 ## Dependency Resolution and Context Association
 
 Entities extracted from the document may have dependencies or associations with other entities. For example, an Abbreviation depends on its corresponding Law Title, and an Article Number may depend on a Law Title or Abbreviation.
-
 
 | Entity Type         | Category  | Depends On                                         | Description of Association Logic                                                            |
 | ------------------- | --------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------- |
@@ -452,7 +446,6 @@ Entities extracted from the document may have dependencies or associations with 
 | **Issue Number**    | Attr      | –                                                  | –                                                                                           |
 | **Issue Date**      | Attr      | –                                                  | –                                                                                           |
 | **Promulgator**     | Attr      | –                                                  | –                                                                                           |
-
 
 ### EntityAssociator Interface
 
@@ -478,8 +471,8 @@ class EntityAssociator(ABC):
         pass
 ```
   
-  - Each entity type (e.g., Law Title, Abbreviation, Article Number) will have its own associator implementation.
-  - The association logic (lookahead, lookbehind, regex, or custom rules) is encapsulated inside the implementation.
+- Each entity type (e.g., Law Title, Abbreviation, Article Number) will have its own associator implementation.
+- The association logic (lookahead, lookbehind, regex, or custom rules) is encapsulated inside the implementation.
 
 This design allows each entity type to encapsulate its own dependency resolution logic, making the pipeline more maintainable and extensible as new entity types or association rules are added.
 
@@ -536,17 +529,16 @@ class IndexedLookupDict(UserDict, Generic[T]):
 
 This structure enables EntityAssociator implementations to efficiently resolve dependencies and establish associations based on entity positions within the text.
 
-
-###  Circular Dependency Considerations
+### Circular Dependency Considerations
 
 Dependencies between entities must be **acyclic** to ensure correct resolution and association.
 
-  - Rationale: Circular dependencies can lead to infinite loops or incorrect attribute linking during entity association.
-  - Future Enhancement: A cycle detection mechanism can be implemented using a Directed Acyclic Graph (DAG).
+- Rationale: Circular dependencies can lead to infinite loops or incorrect attribute linking during entity association.
+- Future Enhancement: A cycle detection mechanism can be implemented using a Directed Acyclic Graph (DAG).
 
-    - Build a dependency graph where nodes represent entities and edges represent "depends-on" relationships.
-    - Detect cycles using graph traversal algorithms (e.g., DFS with backtracking).
-    - Fast-fail mechanism. If a cycle is found, raise an exception or error immediately, preventing further association.
+  - Build a dependency graph where nodes represent entities and edges represent "depends-on" relationships.
+  - Detect cycles using graph traversal algorithms (e.g., DFS with backtracking).
+  - Fast-fail mechanism. If a cycle is found, raise an exception or error immediately, preventing further association.
 
 This ensures that EntityAssociator implementations can safely rely on acyclic dependencies when performing lookahead/lookbehind or other association strategies.
 
@@ -566,23 +558,22 @@ flowchart LR
     I --> J[End: All Entities Associated]
 ```
 
-
 ## Reference Text Normalization
 
 The purpose of Reference Text Normalization is to transform extracted raw reference strings into a consistent, canonical format suitable for downstream processing. The input to this step comes from the Entity Extraction Engine, which extracts candidate reference texts from legal documents.
 
 Normalization is performed in two stages:
+
 1. General Text Normalization
 2. Type-Specific Normalization
-
 
 ### General Text Normalization
 
 All extracted references, regardless of type, first undergo uniform text cleaning and formatting to ensure baseline consistency:
 
-- Whitespace removal: 
+- Whitespace removal:
   - Remove unnecessary spaces within or around the text.
-- Special Character Replacement
+- Special Character Replacement.
 - HTML entity Unescaping
   - Converts HTML-encoded characters(e.g., `&amp;`, `&lt;`) back to original characters.
 - Full-width to half-width conversion
@@ -590,11 +581,9 @@ All extracted references, regardless of type, first undergo uniform text cleanin
 
 The output of this stage ensure that the text is clean, consistent, and ready for further processing.
 
-
 ### Reference-Type Specific Normalization
 
 After general cleaning, type-specific normalization rules are applied. These rules encapsulate domain knowledge of how legal references are typically expressed and how they should be standardized for reliable identification.
-
 
 #### Law Title Normalization
 
@@ -602,10 +591,10 @@ The purpose of law title normalization is to extract the core term—the minimal
 
 >[!tip] The core term may not be strictly unique; different titles can occasionally share the same core term. However, the probability of collision is low, and any remaining ambiguity can be resolved using contextual attributes (e.g., promulgator, issue number, or issue date).
 
-
 ##### Non-Nested Titles
 
 Most law titles follow a simple structure:
+
 ```
 [Prefixes] (optional) + Core Term + [Suffixes] (optional)
 
@@ -618,7 +607,6 @@ Most law titles follow a simple structure:
 - Suffixes: version modifiers such as “（2023年修正）”.
 
 Normalization removes prefixes and suffixes, preserving only the core term as the lookup key.
-
 
 ##### Nested Titles
 
@@ -635,9 +623,8 @@ In more complex cases, a nested structure occurs, where the true law title is em
 - E (optional): document type terms such as “通知”, “命令”, or “公告”
 
 Two valid forms are recognized as nested titles:
+
 - B, C, D required; A and E optional
 - D and E required; A, B, C optional
 
 In both cases, the normalization process extracts Part D (Law Title) and then applies the same non-nested normalization rules to derive the core term.
-
-#### Case Number Normalization

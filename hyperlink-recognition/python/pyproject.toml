@@ -5,6 +5,7 @@ requires-python = ">=3.10"
 description = "The Hyperlink Recognition system is designed to automatically detect and validate references within documents."
 authors = [{ name = "xbhel", email = "xbhel@outlook.com" }]
 dependencies = [
+    "pyahocorasick==2.2.0"
 ]
 
 [dependency-groups]
