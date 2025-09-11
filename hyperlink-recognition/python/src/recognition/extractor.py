@@ -89,18 +89,17 @@ class PairedSymbolExtractor(Extractor):
         pending: dict[int, list[TextSpan]] = defaultdict(list)
         for matcher in self._symbol_pattern.finditer(text):
             index, val = matcher.start(), matcher.group()
-            # occur the left symbol
+            # left symbol
             if val == self._left:
                 depth += 1
                 stack.append((index, val))
                 continue
-            # occur the right symbol
+            # right symbol
             if not stack or stack[-1][1] != self._left:
                 continue
 
             left_index, _ = stack.pop()
             item = self._make_text_span(text, left_index, index + 1)
-
             if not stack:
                 yield item
             else:
@@ -122,14 +121,14 @@ class PairedSymbolExtractor(Extractor):
         for matcher in self._symbol_pattern.finditer(text):
             index, val = matcher.start(), matcher.group()
 
-            # occur the left symbol
+            # left symbol
             if val == self._left:
                 depth += 1
                 max_depth_seen = max(depth, max_depth_seen)
                 stack.append((index, val))
                 continue
 
-            # occur the right symbol
+            # right symbol
             if not stack or stack[-1][1] != self._left:
                 continue
 
@@ -179,9 +178,8 @@ class KeywordExtractor(Extractor):
         ignore_overlaps: bool = False,
     ) -> None:
         self._ignore_overlaps = ignore_overlaps
-        self._keywords = set(keywords)
-        self._automaton = self._build_automaton(self._keywords)
-        self._max_keyword_length = max((len(k) for k in self._keywords), default=0)
+        self._automaton = self._build_automaton(keywords)
+        self._max_keyword_length = len(max(self._automaton.keys(), key=len))
 
     def extract(self, text: str) -> Iterable[TextSpan]:
         """
