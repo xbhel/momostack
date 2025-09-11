@@ -225,7 +225,6 @@ class KeywordBasedExtractor(Extractor):
         """
         self.keywords = keywords
         self.case_sensitive = case_sensitive
-        self.fuzzy_threshold = fuzzy_threshold
 
     def extract(self, paragraph: str) -> Iterable[Entity]:
         """

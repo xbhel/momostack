@@ -4,13 +4,27 @@ from collections import defaultdict, deque
 from collections.abc import Callable, Iterable
 from typing import Literal
 
-from recognition.data_model import TextSpan
+import ahocorasick  # type: ignore  # noqa: PGH003
+from data_model import TextSpan
 
 
 class Extractor(ABC):
+    """
+    Abstract base class for all extractors.
+    """
+
     @abstractmethod
     def extract(self, text: str) -> Iterable[TextSpan]:
+        """
+        Extract entities from the given text.
+        """
         raise NotImplementedError
+
+    def _make_text_span(self, text: str, start: int, end: int) -> TextSpan:
+        """
+        Helper to create a TextSpan object.
+        """
+        return TextSpan(text, start, end)
 
 
 class PairedSymbolExtractor(Extractor):
@@ -42,7 +56,7 @@ class PairedSymbolExtractor(Extractor):
         symbol_pair: tuple[str, str],
         include_symbols: bool = False,
         strategy: Literal["outermost", "innermost", "all"] = "all",
-        allow_fallback_on_unclosed: bool = True,
+        allow_fallback_on_unclosed: bool = False,
     ):
         self._left, self._right = symbol_pair
         self._include_symbols = include_symbols
@@ -143,3 +157,67 @@ class PairedSymbolExtractor(Extractor):
         inner_start = start + len(self._left)
         inner_end = end - len(self._right)
         return TextSpan(text[inner_start:inner_end], inner_start, inner_end)
+
+
+class KeywordExtractor(Extractor):
+    """
+    Efficient multi-keyword extractor using Aho-Corasick automaton.
+
+    Features:
+    - Supports overlapping and non-overlapping (longest match) extraction.
+    - Handles edge case where input is shorter than the longest keyword.
+    - Returns TextSpan objects for each match.
+
+    Args:
+        keywords: Iterable of keywords to match.
+        ignore_overlaps: If True, only the longest non-overlapping matches are returned.
+    """
+
+    def __init__(
+        self,
+        keywords: Iterable[str],
+        ignore_overlaps: bool = False,
+    ) -> None:
+        self._ignore_overlaps = ignore_overlaps
+        self._keywords = set(keywords)
+        self._automaton = self._build_automaton(self._keywords)
+        self._max_keyword_length = max((len(k) for k in self._keywords), default=0)
+
+    def extract(self, text: str) -> Iterable[TextSpan]:
+        """
+        Extract all keyword matches from the input text.
+
+        :param text: Input string to search for keywords.
+        :return: Iterable of TextSpan objects for each match.
+        """
+        padded_text = self._pad_text(text)
+        if self._ignore_overlaps:
+            iterator = self._automaton.iter_long(padded_text)
+        else:
+            iterator = self._automaton.iter(padded_text)
+        for end_index, word in iterator:
+            start = end_index - len(word) + 1
+            end = end_index + 1
+            if end > len(text):
+                # Ignore matches that are only in the padding
+                break
+            yield self._make_text_span(word, start, end)
+
+    def _build_automaton(self, keywords: Iterable[str]) -> ahocorasick.Automaton:
+        automaton = ahocorasick.Automaton()
+        for word in keywords:
+            automaton.add_word(word, word)
+        automaton.make_automaton()
+        return automaton
+
+    def _pad_text(self, text: str) -> str:
+        """
+        Pad the text with spaces if it's shorter than the longest keyword.
+        This is a workaround for a known pyahocorasick bug.
+        """
+        # https://github.com/WojciechMula/pyahocorasick/issues/133
+        if self._ignore_overlaps:
+            padding_len = self._max_keyword_length - len(text)
+            if padding_len > 0:
+                return text + " " * padding_len
+        return text
