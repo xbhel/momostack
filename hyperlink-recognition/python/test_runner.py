@@ -6,7 +6,8 @@ from typing import Any
 
 import coverage
 
-# Can't use __file__ because when running with coverage via command line, __file__ is not the full path
+# Can't use __file__ because when running with coverage via command line,
+# __file__ is not the full path
 current_location = os.path.dirname(os.path.abspath(inspect.stack()[0][1]))
 
 

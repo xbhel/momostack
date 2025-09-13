@@ -24,19 +24,6 @@ filterwarnings = ["error"]
 ignore = ["D001"]
 
 
-[tool.mypy]
-strict = true
-pretty = true
-show_error_codes = true
-warn_unreachable = false
-files = ["src", "tests"]
-exclude = "(?x)(/hooks/ | tests/test-output-folder/)"
-
-[[tool.mypy.overrides]]
-module = ["tests.*"]
-disable_error_code = ["no-untyped-def"]
-
-
 [tool.ruff]
 src = ["src"]
 fix = true
@@ -125,6 +112,23 @@ exclude = ["tests/**"]
 
 [tool.ruff.format]
 quote-style = "preserve"
+
+
+[tool.mypy]
+strict = true
+pretty = true
+show_error_codes = true
+warn_unreachable = false
+no_implicit_reexport = true
+files = ["src", "tests"]
+exclude = "(?x)(/hooks/ | tests/test-output-folder/)"
+
+[[tool.mypy.overrides]]
+module = [
+    "tests.*",
+]
+disable_error_code = ["no-untyped-def"]
+
 
 [tool.coverage.run]
 branch = true

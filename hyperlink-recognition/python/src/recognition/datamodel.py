@@ -3,7 +3,7 @@ from typing import Self
 
 
 @dataclass
-class TextSpan:
+class Segment:
     text: str
     start: int  # inclusive
     end: int  # exclusive
@@ -16,7 +16,9 @@ class TextSpan:
 
 
 @dataclass
-class Entity(TextSpan):
+class Entity(Segment):
     category: str
     entity_type: str
     attrs: list[str] | None = None
+
+

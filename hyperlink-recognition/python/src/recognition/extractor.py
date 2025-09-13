@@ -5,7 +5,8 @@ from collections.abc import Callable, Iterable
 from typing import Literal
 
 import ahocorasick  # type: ignore  # noqa: PGH003
-from data_model import TextSpan
+
+from recognition.datamodel import Segment
 
 
 class Extractor(ABC):
@@ -14,17 +15,17 @@ class Extractor(ABC):
     """
 
     @abstractmethod
-    def extract(self, text: str) -> Iterable[TextSpan]:
+    def extract(self, text: str) -> Iterable[Segment]:
         """
         Extract entities from the given text.
         """
         raise NotImplementedError
 
-    def _make_text_span(self, text: str, start: int, end: int) -> TextSpan:
+    def _make_value(self, text: str, start: int, end: int) -> Segment:
         """
         Helper to create a TextSpan object.
         """
-        return TextSpan(text, start, end)
+        return Segment(text, start, end)
 
 
 class PairedSymbolExtractor(Extractor):
@@ -64,11 +65,11 @@ class PairedSymbolExtractor(Extractor):
         self._allow_fallback_on_unclosed = allow_fallback_on_unclosed
         self._symbol_pattern = re.compile("|".join(re.escape(s) for s in symbol_pair))
 
-    def extract(self, text: str) -> Iterable[TextSpan]:
+    def extract(self, text: str) -> Iterable[Segment]:
         """Extract terms according to the configured nesting strategy."""
         yield from self._extract_func(text)
 
-    def _extract_all(self, text: str) -> Iterable[TextSpan]:
+    def _extract_all(self, text: str) -> Iterable[Segment]:
         stack: deque[tuple[int, str]] = deque()
         for matcher in self._symbol_pattern.finditer(text):
             index, val = matcher.start(), matcher.group()
@@ -81,12 +82,12 @@ class PairedSymbolExtractor(Extractor):
                 continue
 
             left_index, _ = stack.pop()
-            yield self._make_text_span(text, left_index, index + 1)
+            yield self._make_value(text, left_index, index + 1)
 
-    def _extract_outermost(self, text: str) -> Iterable[TextSpan]:
+    def _extract_outermost(self, text: str) -> Iterable[Segment]:
         depth = 0
         stack: deque[tuple[int, str]] = deque()
-        pending: dict[int, list[TextSpan]] = defaultdict(list)
+        pending: dict[int, list[Segment]] = defaultdict(list)
         for matcher in self._symbol_pattern.finditer(text):
             index, val = matcher.start(), matcher.group()
             # left symbol
@@ -99,7 +100,7 @@ class PairedSymbolExtractor(Extractor):
                 continue
 
             left_index, _ = stack.pop()
-            item = self._make_text_span(text, left_index, index + 1)
+            item = self._make_value(text, left_index, index + 1)
             if not stack:
                 yield item
             else:
@@ -115,7 +116,7 @@ class PairedSymbolExtractor(Extractor):
 
         pending.clear()
 
-    def _extract_innermost(self, text: str) -> Iterable[TextSpan]:
+    def _extract_innermost(self, text: str) -> Iterable[Segment]:
         depth = max_depth_seen = 0
         stack: deque[tuple[int, str]] = deque()
         for matcher in self._symbol_pattern.finditer(text):
@@ -134,7 +135,7 @@ class PairedSymbolExtractor(Extractor):
 
             left_index, _ = stack.pop()
             if depth == max_depth_seen:
-                yield self._make_text_span(text, left_index, index + 1)
+                yield self._make_value(text, left_index, index + 1)
 
             depth -= 1
             if depth == 0:
@@ -142,20 +143,20 @@ class PairedSymbolExtractor(Extractor):
 
     def _get_strategy_handler(
         self, strategy: str
-    ) -> Callable[[str], Iterable[TextSpan]]:
+    ) -> Callable[[str], Iterable[Segment]]:
         if strategy == "innermost":
             return self._extract_innermost
         if strategy == "outermost":
             return self._extract_outermost
         return self._extract_all
 
-    def _make_text_span(self, text: str, start: int, end: int) -> TextSpan:
+    def _make_value(self, text: str, start: int, end: int) -> Segment:
         if self._include_symbols:
-            return TextSpan(text[start:end], start, end)
+            return Segment(text[start:end], start, end)
 
         inner_start = start + len(self._left)
         inner_end = end - len(self._right)
-        return TextSpan(text[inner_start:inner_end], inner_start, inner_end)
+        return Segment(text[inner_start:inner_end], inner_start, inner_end)
 
 
 class KeywordExtractor(Extractor):
@@ -165,7 +166,7 @@ class KeywordExtractor(Extractor):
     Features:
     - Supports overlapping and non-overlapping (longest match) extraction.
     - Handles edge case where input is shorter than the longest keyword.
-    - Returns TextSpan objects for each match.
+    - Returns Segment objects for each match.
 
     Args:
         keywords: Iterable of keywords to match.
@@ -181,12 +182,12 @@ class KeywordExtractor(Extractor):
         self._automaton = self._build_automaton(keywords)
         self._max_keyword_length = len(max(self._automaton.keys(), key=len))
 
-    def extract(self, text: str) -> Iterable[TextSpan]:
+    def extract(self, text: str) -> Iterable[Segment]:
         """
         Extract all keyword matches from the input text.
 
         :param text: Input string to search for keywords.
-        :return: Iterable of TextSpan objects for each match.
+        :return: Iterable of Segment objects for each match.
         """
         padded_text = self._pad_text(text)
         if self._ignore_overlaps:
@@ -199,7 +200,7 @@ class KeywordExtractor(Extractor):
             if end > len(text):
                 # Ignore matches that are only in the padding
                 break
-            yield self._make_text_span(word, start, end)
+            yield self._make_value(word, start, end)
 
     def _build_automaton(self, keywords: Iterable[str]) -> ahocorasick.Automaton:
         automaton = ahocorasick.Automaton()
