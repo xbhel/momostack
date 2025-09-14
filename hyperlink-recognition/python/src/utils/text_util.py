@@ -2,7 +2,7 @@ import html
 import re
 from typing import Final
 
-from io_util import load_schema_json
+from utils.io_util import load_schema_json
 
 _WHITESPACE_REGEX: Final = re.compile(r"\s+", re.UNICODE)
 _ASCII_MAPPING_TABLE: Final = load_schema_json("AsciiMapping.json")

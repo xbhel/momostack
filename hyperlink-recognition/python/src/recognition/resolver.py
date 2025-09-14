@@ -1,48 +1,100 @@
 from collections.abc import Iterable
+from typing import Literal
 
-from recognition.datamodel import Segment
+from recognition.datamodels import Segment
 
 
-def resolve_overlaps_keep_longest(iterable: Iterable[Segment]) -> list[Segment]:
+def resolve_overlaps(
+    iterable: Iterable[Segment],
+    strategy: Literal["longest", "earliest", "earliest_longest"],
+    direct_only: bool = False,
+) -> list[Segment]:
     """
-    Given an iterable of Segment, return a list where overlapping segments are resolved
-    by keeping the longest segment in each overlapping group.
-    Segments are returned in order.
+    Resolve overlapping segments according to the specified strategy.
+
+    This function processes a sequence of Segment objects and removes overlaps
+    according to the chosen strategy. Optionally, you can restrict overlap
+    handling to *direct* overlaps only.
+
+    :param iterable: An iterable of Segment objects.
+    :param strategy: The overlap resolution strategy. One of:
+        - "longest": For each group of overlapping segments, keep the longest.
+        - "earliest": Keep the earliest non-overlapping segments.
+        - "earliest_longest": Prefer earliest, break ties by longest.
+    :param direct_only: If True, only directly overlapping segments are considered
+                        conflicts; indirectly overlapping segments (via a chain of
+                        overlaps) are treated as separate. Default is False.
+
+    :return: A list of resolved, non-overlapping Segment objects.
+
+    Examples::
+
+        # Suppose we have three segments: (0, 5), (4, 7), (6, 10)
+        segments = [Segment(0, 5), Segment(4, 7), Segment(6, 10)]
+
+        # Longest strategy, chained overlaps (direct_only=False)
+        resolve_overlaps(segments, "longest", direct_only=False)
+
+        # Output: [(0, 5)]  -> the overlapping chain (0-5,4-7,6-10) is merged,
+        #           keeping the longest segment
+
+        # Longest strategy, direct overlaps only (direct_only=True)
+        resolve_overlaps(segments, "longest", direct_only=True)
+        # Output: [(0, 5), (6, 10)] -> only direct overlaps are considered,
+        #           so (0,5) and (4,7) are compared separately from (6,10)
     """
-    segments = sorted(iterable, key=lambda x: x.start)
+    match strategy:
+        case "longest":
+            segments = sorted(iterable, key=lambda x: x.start)
+            func = _resolve_overlaps_keep_longest
+        case "earliest":
+            segments = sorted(iterable, key=lambda x: x.start)
+            func = _resolve_overlaps_keep_earliest
+        case "earliest_longest":
+            segments = sorted(iterable, key=lambda x: (x.start, -x.end))
+            func = _resolve_overlaps_keep_earliest
 
     if not segments:
         return []
+    return func(segments, direct_only)
 
+
+def _resolve_overlaps_keep_longest(
+    segments: list[Segment], direct_only: bool = False
+) -> list[Segment]:
     result = []
     longest = segments[0]
+    group_end = longest.end
 
-    for _, segment in enumerate(segments, 1):
-        if segment.start < longest.end:
-            longest = max(segment, longest, key=lambda x: x.end - x.start)
+    for index in range(1, len(segments)):
+        seg = segments[index]
+        # Check if segments overlap: seg.start < group_end
+        if seg.start < group_end:
+            # Segments overlap, keep the longer one
+            if (seg.end - seg.start) > (longest.end - longest.start):
+                longest = seg
+            group_end = longest.end if direct_only else max(group_end, seg.end)
         else:
+            # No overlap, add the current longest to result and start new group
             result.append(longest)
-            longest = segment
+            longest = seg
+            group_end = longest.end
 
     # Don't forget the last group
     result.append(longest)
     return result
 
 
-def resolve_overlaps_keep_earliest(iterable: Iterable[Segment]) -> list[Segment]:
-    """
-    Given an iterable of Segment, return a list where overlapping segments are resolved
-    by keeping the earliest (first) segment in each overlapping group.
-    Segments are returned in order.
-    """
-    segments = sorted(iterable, key=lambda x: (x.start, x.end))
-    if not segments:
-        return []
-
+def _resolve_overlaps_keep_earliest(
+    segments: list[Segment], direct_only: bool = False
+) -> list[Segment]:
     result = []
     prev_end = -1
+
     for segment in segments:
         if segment.start >= prev_end:
             result.append(segment)
             prev_end = segment.end
+        if not direct_only:
+            prev_end = max(prev_end, segment.end)
     return result

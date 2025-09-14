@@ -6,7 +6,7 @@ from typing import Literal
 
 import ahocorasick  # type: ignore  # noqa: PGH003
 
-from recognition.datamodel import Segment
+from recognition.datamodels import Segment
 
 
 class Extractor(ABC):
@@ -23,7 +23,7 @@ class Extractor(ABC):
 
     def _make_value(self, text: str, start: int, end: int) -> Segment:
         """
-        Helper to create a TextSpan object.
+        Helper to create a Segment object.
         """
         return Segment(text, start, end)
 
@@ -171,6 +171,9 @@ class KeywordExtractor(Extractor):
     Args:
         keywords: Iterable of keywords to match.
         ignore_overlaps: If True, only the longest non-overlapping matches are returned.
+
+    Raises:
+        ValueError: If keywords list is empty
     """
 
     def __init__(
@@ -206,6 +209,10 @@ class KeywordExtractor(Extractor):
         automaton = ahocorasick.Automaton()
         for word in keywords:
             automaton.add_word(word, word)
+
+        if not automaton:
+            raise ValueError("Failed to build automaton: empty keyword list.")
+
         automaton.make_automaton()
         return automaton
 
