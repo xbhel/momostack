@@ -1,14 +1,15 @@
 import re
 from collections.abc import Iterable
+from typing import Final
 
 from recognition.extractor import KeywordExtractor, PairedSymbolExtractor
 from utils import text_util
 
-_COMMA = ","
-_LEFT_BRACKET = '('
-_RIGHT_BRACKET = ')'
-
-_NESTED_TITLE_PATTERN = re.compile(r"^[^<>]+<[^<>]+>[^<>]*$")
+_COMMA: Final = ","
+_LEFT_BRACKET: Final = '('
+_RIGHT_BRACKET: Final = ')'
+_FORWARD_CHINESE: Final = "转发"
+_NESTED_TITLE_PATTERN: Final = re.compile(r"^[^<>]+<([^<>]+)>[^<>]*$")
 
 
 class Normalizer:
@@ -75,8 +76,19 @@ class ChineseLawTitleNormalizer(Normalizer):
 
         text = super().normalize(text)
         text = text_util.remove_all_whitespaces(text)
+        text = self._extract_nested_text(text)
+
+        # remove prefixes
         text = self._remove_promulgators(text)
+        # remove suffixes
         return self._remove_trailing_brackets(text)
+
+    def _extract_nested_text(self, text: str) -> str:
+        if text.find(_FORWARD_CHINESE) != -1:
+            return text
+        if matcher := _NESTED_TITLE_PATTERN.match(text):
+            return matcher.group(1)
+        return text
 
     def _remove_trailing_brackets(self, text: str) -> str:
         """Remove trailing brackets from the end of the text."""
@@ -90,6 +102,9 @@ class ChineseLawTitleNormalizer(Normalizer):
         # Remove brackets from the end, working backwards
         while bracket := end_map.get(end_index):
             end_index = bracket.start
+
+        if end_index == 0:
+            return text
 
         return text[:end_index]
 
@@ -122,5 +137,8 @@ class ChineseLawTitleNormalizer(Normalizer):
             # Skip trailing commas
             while start_index < len(text) and text[start_index] == _COMMA:
                 start_index += 1
+
+        if start_index == len(text):
+            return text
 
         return text[start_index:]

@@ -16,16 +16,18 @@ def resolve_overlaps(
     according to the chosen strategy. Optionally, you can restrict overlap
     handling to *direct* overlaps only.
 
-    :param iterable: An iterable of Segment objects.
-    :param strategy: The overlap resolution strategy. One of:
-        - "longest": For each group of overlapping segments, keep the longest.
-        - "earliest": Keep the earliest non-overlapping segments.
-        - "earliest_longest": Prefer earliest, break ties by longest.
-    :param direct_only: If True, only directly overlapping segments are considered
+    Args:
+        iterable: An iterable of Segment objects.
+        strategy: The overlap resolution strategy. One of:
+            - "longest": For each group of overlapping segments, keep the longest.
+            - "earliest": Keep the earliest non-overlapping segments.
+            - "earliest_longest": Prefer earliest, break ties by longest.
+        direct_only: If True, only directly overlapping segments are considered
                         conflicts; indirectly overlapping segments (via a chain of
                         overlaps) are treated as separate. Default is False.
 
-    :return: A list of resolved, non-overlapping Segment objects.
+    Returns:
+        A list of resolved, non-overlapping Segment objects.
 
     Examples::
 
@@ -80,7 +82,7 @@ def _resolve_overlaps_keep_longest(
             longest = seg
             group_end = longest.end
 
-    # Don't forget the last group
+    # The last group
     result.append(longest)
     return result
 

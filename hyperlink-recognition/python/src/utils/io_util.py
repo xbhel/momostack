@@ -13,8 +13,8 @@ except NameError:
     WORKING_DIR = os.path.dirname(os.path.abspath(inspect.stack()[0][1]))
 
 
-def load_schema_json(relative_path: str) -> Any:
-    normal_path = os.path.normpath(f"../schemas/{relative_path}")
+def load_resource_json(relative_path: str) -> Any:
+    normal_path = os.path.normpath(f"../resources/{relative_path}")
     real_path = os.path.join(WORKING_DIR, normal_path)
     with open(real_path, encoding='utf-8') as f:
         try:

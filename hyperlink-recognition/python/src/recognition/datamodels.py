@@ -1,5 +1,18 @@
 from dataclasses import dataclass
+from enum import Enum, unique
 from typing import Self
+
+
+@unique
+class EntityType(str, Enum):
+    LAW_TITLE = 1
+    LAW_ARTICLE_NO = 2
+    LAW_ABBR = 4
+    LAW_SELF = 5
+    CASE_NO = 3
+    DATE = 6
+    ISSUE_NO = 7
+    PROMULGATOR = 8
 
 
 @dataclass
@@ -18,7 +31,5 @@ class Segment:
 @dataclass
 class Entity(Segment):
     category: str
-    entity_type: str
+    entity_type: EntityType
     attrs: list[str] | None = None
-
-

@@ -40,13 +40,14 @@ class PairedSymbolExtractor(Extractor):
     If the outermost closing symbol is missing, the extractor can optionally
     fall back to using the widest (outermost) closed pair as the result.
 
-    :param symbol_pair:
+    Args:
+        symbol_pair:
             A tuple of (left_symbol, right_symbol).
-    :param include_symbols:
+        include_symbols:
             Whether to include the enclosing symbols in the extracted value.
-    :param strategy:
+        strategy:
             Strategy for handling nested symbols ("outermost", "innermost", "all").
-    :param allow_fallback_on_unclosed:
+        allow_fallback_on_unclosed:
             If True, when the outermost pair is unclosed,
             the outermost closed pair will be used as a fallback
             (only in "outermost" mode).
@@ -73,11 +74,11 @@ class PairedSymbolExtractor(Extractor):
         stack: deque[tuple[int, str]] = deque()
         for matcher in self._symbol_pattern.finditer(text):
             index, val = matcher.start(), matcher.group()
-            # occur the left symbol
+            # left symbol
             if val == self._left:
                 stack.append((index, val))
                 continue
-            # occur the right symbol
+            # right symbol
             if not stack or stack[-1][1] != self._left:
                 continue
 
@@ -188,9 +189,10 @@ class KeywordExtractor(Extractor):
     def extract(self, text: str) -> Iterable[Segment]:
         """
         Extract all keyword matches from the input text.
-
-        :param text: Input string to search for keywords.
-        :return: Iterable of Segment objects for each match.
+        Args:
+            text: Input string to search for keywords.
+        Returns:
+            Iterable of Segment objects for each match.
         """
         padded_text = self._pad_text(text)
         if self._ignore_overlaps:

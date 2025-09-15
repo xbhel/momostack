@@ -2,10 +2,10 @@ import html
 import re
 from typing import Final
 
-from utils.io_util import load_schema_json
+from utils.io_util import load_resource_json
 
 _WHITESPACE_REGEX: Final = re.compile(r"\s+", re.UNICODE)
-_ASCII_MAPPING_TABLE: Final = load_schema_json("AsciiMapping.json")
+_ASCII_MAPPING_TABLE: Final = load_resource_json("AsciiMapping.json")
 
 
 def to_ascii(text: str) -> str:
