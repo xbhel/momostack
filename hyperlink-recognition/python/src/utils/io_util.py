@@ -20,7 +20,7 @@ def load_resource_json(relative_path: str) -> Any:
         try:
             return json.loads(f.read())
         except json.JSONDecodeError as e:
-            raise RuntimeError(f"Error loading JSON schema from {real_path}") from e
+            raise RuntimeError(f"Error loading JSON resource from {real_path}") from e
 
 
 def iter_files(base_path: str) -> Iterator[Path]:

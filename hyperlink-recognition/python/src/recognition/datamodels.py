@@ -4,15 +4,23 @@ from typing import Self
 
 
 @unique
-class EntityType(str, Enum):
-    LAW_TITLE = 1
-    LAW_ARTICLE_NO = 2
-    LAW_ABBR = 4
-    LAW_SELF = 5
-    CASE_NO = 3
-    DATE = 6
-    ISSUE_NO = 7
-    PROMULGATOR = 8
+class EntityType(int, Enum):
+    DATE = (1,)
+    ISSUE_NO = (2,)
+    PROMULGATOR = (3,)
+    CASE_NO = (4,)
+    LAW_TITLE = 5, (DATE, ISSUE_NO, PROMULGATOR)
+    LAW_ARTICLE_NO = 6, (LAW_TITLE,)
+    LAW_ABBR = 7, (LAW_TITLE,)
+    LAW_SELF = 8, (LAW_TITLE,)
+
+    def __init__(
+        self,
+        code: int,
+        depends_on: tuple[Self, ...],
+    ) -> None:
+        self.code = code
+        self.depends_on = depends_on
 
 
 @dataclass
@@ -30,6 +38,21 @@ class Segment:
 
 @dataclass
 class Entity(Segment):
-    category: str
+    # category: str
     entity_type: EntityType
     attrs: list[str] | None = None
+
+    @classmethod
+    def of(
+        cls,
+        segment: Segment,
+        entity_type: EntityType,
+        attrs: list[str] | None = None,
+    ) -> Self:
+        return cls(
+            text=segment.text,
+            start=segment.start,
+            end=segment.end,
+            entity_type=entity_type,
+            attrs=attrs,
+        )
