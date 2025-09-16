@@ -33,6 +33,7 @@ A comprehensive reference guide for common Python patterns, best practices, and 
     - [Plugin System](#plugin-system)
     - [Key Points and Best Practices](#key-points-and-best-practices)
     - [Common Use Cases](#common-use-cases)
+  - [How to define constants with multiple names](https://github.com/psf/requests/blob/main/src/requests/status_codes.py)
 
 ---
 
