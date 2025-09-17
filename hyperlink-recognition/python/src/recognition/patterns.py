@@ -3,24 +3,19 @@ import re
 from recognition.structures import LookupDict
 from utils import io_util
 
-PatternType = re.Pattern[str] | list[re.Pattern[str]]
 
-# Use the readonly LookupDict
-patterns: LookupDict[str, PatternType]
-
-
-def _init_patterns() -> LookupDict[str, PatternType]:
+def _init_patterns() -> LookupDict[str, re.Pattern[str] | list[re.Pattern[str]]]:
     """
     Load and compile regex patterns from Pattern.json.
     Returns:
-        LookupDict[str, PatternType]: A mapping from pattern names to
-            compiled regex patterns.
+        LookupDict[str, re.Pattern[str] | list[re.Pattern[str]]]:
+            A mapping from pattern names to compiled regex patterns.
     Raises:
         ValueError: If a pattern entry is empty.
         TypeError: If a pattern entry is not a string or list of strings.
     """
     conf = io_util.load_resource_json("PatternMapping.json")
-    mapping: dict[str, PatternType] = {}
+    mapping: dict[str, re.Pattern[str] | list[re.Pattern[str]]] = {}
 
     for name, values in conf.items():
         if not values:
@@ -39,4 +34,5 @@ def _init_patterns() -> LookupDict[str, PatternType]:
     return LookupDict(mapping)
 
 
+# Use the readonly LookupDict
 patterns = _init_patterns()

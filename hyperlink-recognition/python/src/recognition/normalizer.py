@@ -1,15 +1,18 @@
-import re
 from collections.abc import Iterable
-from typing import Final
+from typing import TYPE_CHECKING, Final, cast
 
 from recognition.extractor import KeywordExtractor, PairedSymbolExtractor
+from recognition.patterns import patterns
 from utils import text_util
+
+if TYPE_CHECKING:
+    import re
 
 _COMMA: Final = ","
 _LEFT_BRACKET: Final = '('
 _RIGHT_BRACKET: Final = ')'
 _FORWARD_CHINESE: Final = "转发"
-_NESTED_TITLE_PATTERN: Final = re.compile(r"^[^<>]+<([^<>]+)>[^<>]*$")
+_NESTED_TITLE_PATTERN: Final = cast("re.Pattern[str]", patterns['nested_title'])
 
 
 class Normalizer:

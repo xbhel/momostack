@@ -2,11 +2,12 @@ import re
 from abc import ABC, abstractmethod
 from collections import defaultdict, deque
 from collections.abc import Callable, Iterable
-from typing import Literal
+from typing import Final, Literal, cast, override
 
 import ahocorasick  # type: ignore  # noqa: PGH003
 
 from recognition.datamodels import Segment
+from recognition.patterns import patterns
 
 
 class Extractor(ABC):
@@ -66,6 +67,7 @@ class PairedSymbolExtractor(Extractor):
         self._allow_fallback_on_unclosed = allow_fallback_on_unclosed
         self._symbol_pattern = re.compile("|".join(re.escape(s) for s in symbol_pair))
 
+    @override
     def extract(self, text: str) -> Iterable[Segment]:
         """Extract terms according to the configured nesting strategy."""
         yield from self._extract_func(text)
@@ -151,6 +153,7 @@ class PairedSymbolExtractor(Extractor):
             return self._extract_outermost
         return self._extract_all
 
+    @override
     def _make_value(self, text: str, start: int, end: int) -> Segment:
         if self._include_symbols:
             return Segment(text[start:end], start, end)
@@ -186,6 +189,7 @@ class KeywordExtractor(Extractor):
         self._automaton = self._build_automaton(keywords)
         self._max_keyword_length = len(max(self._automaton.keys(), key=len))
 
+    @override
     def extract(self, text: str) -> Iterable[Segment]:
         """
         Extract all keyword matches from the input text.
@@ -229,3 +233,27 @@ class KeywordExtractor(Extractor):
             if padding_len > 0:
                 return text + " " * padding_len
         return text
+
+
+class RegexPatternExtractor(Extractor):
+    def __init__(self, pattern: re.Pattern[str], group: int = 0) -> None:
+        super().__init__()
+        self._pattern = pattern
+        self._group = group
+
+    @override
+    def extract(self, text: str) -> Iterable[Segment]:
+        for matcher in self._pattern.finditer(text):
+            yield self._make_value(
+                matcher.group(self._group),
+                matcher.start(self._group),
+                matcher.end(self._group),
+            )
+
+
+_ABBR_DEFINITION_EXTRACTOR: Final = RegexPatternExtractor(
+    cast("re.Pattern[str]", patterns['abbr_definition'])
+)
+_PAIRED_BUCKETS_EXTRACTOR: Final = RegexPatternExtractor(
+    cast("re.Pattern[str]", patterns['paired_buckets'])
+)

@@ -45,3 +45,7 @@ def unescape_html_entities(text: str, max_unescape_times: int = 3) -> str:
             break
         text = new_text
     return text
+
+
+def strip_quotes(text: str) -> str:
+    return text.strip("\"'‘’“”")  # noqa: RUF001

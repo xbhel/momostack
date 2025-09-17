@@ -4,7 +4,7 @@ from typing import Self
 
 
 @unique
-class EntityType(int, Enum):
+class EntityType(Enum):
     DATE = (1,)
     ISSUE_NO = (2,)
     PROMULGATOR = (3,)
@@ -17,7 +17,7 @@ class EntityType(int, Enum):
     def __init__(
         self,
         code: int,
-        depends_on: tuple[Self, ...],
+        depends_on: tuple[Self, ...] | None = None,
     ) -> None:
         self.code = code
         self.depends_on = depends_on
