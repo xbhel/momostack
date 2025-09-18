@@ -4,23 +4,27 @@ from typing import Self
 
 
 @unique
-class EntityType(Enum):
-    DATE = (1,)
-    ISSUE_NO = (2,)
-    PROMULGATOR = (3,)
-    CASE_NO = (4,)
-    LAW_TITLE = 5, (DATE, ISSUE_NO, PROMULGATOR)
-    LAW_ARTICLE_NO = 6, (LAW_TITLE,)
-    LAW_ABBR = 7, (LAW_TITLE,)
-    LAW_SELF = 8, (LAW_TITLE,)
+class EntityType(int, Enum):
+    depends_on: tuple[Self, ...]
 
-    def __init__(
-        self,
-        code: int,
-        depends_on: tuple[Self, ...] | None = None,
-    ) -> None:
-        self.code = code
-        self.depends_on = depends_on
+    DATE = 1, ()
+    ISSUE_NO = 2, ()
+    PROMULGATOR = 3, ()
+    CASE_NO = 4, ()
+    LAW_SELF = 5, ()
+    LAW_TITLE = 6, (DATE, ISSUE_NO, PROMULGATOR)
+    LAW_ARTICLE_NO = 7, (LAW_TITLE,)
+    LAW_ABBR = 8, (LAW_TITLE,)
+
+    def __new__(
+        cls,
+        value: int,
+        depends_on: tuple[Self, ...],
+    ) -> "EntityType":
+        obj = int.__new__(cls, value)
+        obj._value_ = value
+        obj.depends_on = depends_on or ()
+        return obj
 
 
 @dataclass

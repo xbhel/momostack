@@ -1,3 +1,4 @@
+from pickle import TRUE
 import re
 from abc import ABC, abstractmethod
 from collections import defaultdict, deque
@@ -6,7 +7,7 @@ from typing import Final, Literal, cast, override
 
 import ahocorasick  # type: ignore  # noqa: PGH003
 
-from recognition.datamodels import Segment
+from recognition.datamodels import Entity, EntityType, Segment
 from recognition.patterns import patterns
 
 
@@ -236,24 +237,55 @@ class KeywordExtractor(Extractor):
 
 
 class RegexPatternExtractor(Extractor):
-    def __init__(self, pattern: re.Pattern[str], group: int = 0) -> None:
+    def __init__(
+        self,
+        patterns: re.Pattern[str] | list[re.Pattern[str]],
+        stop_on_first: bool = False,
+        group: int = 0,
+    ) -> None:
         super().__init__()
-        self._pattern = pattern
         self._group = group
+        self._stop_on_first = stop_on_first
+        self._patterns = patterns if isinstance(patterns, list) else [patterns]
 
     @override
     def extract(self, text: str) -> Iterable[Segment]:
-        for matcher in self._pattern.finditer(text):
-            yield self._make_value(
-                matcher.group(self._group),
-                matcher.start(self._group),
-                matcher.end(self._group),
-            )
+        found_any = False
+        for pattern in self._patterns:
+            for matcher in pattern.finditer(text):
+                found_any = True
+                yield self._make_value(
+                    matcher.group(self._group),
+                    matcher.start(self._group),
+                    matcher.end(self._group),
+                )
+            if self._stop_on_first and found_any:
+                return
 
 
+_ISSUE_NO_EXTRACTOR: Final = RegexPatternExtractor(
+    patterns['issue_nos'], stop_on_first=True, group=1
+)
+_LAW_TITLE_EXTRACTOR: Final = PairedSymbolExtractor(
+    ("《", "》"), strategy="outermost", allow_fallback_on_unclosed=True
+)
 _ABBR_DEFINITION_EXTRACTOR: Final = RegexPatternExtractor(
-    cast("re.Pattern[str]", patterns['abbr_definition'])
+    patterns['abbr_definition'], group=1
 )
-_PAIRED_BUCKETS_EXTRACTOR: Final = RegexPatternExtractor(
-    cast("re.Pattern[str]", patterns['paired_buckets'])
-)
+_DATE_EXTRACTOR: Final = RegexPatternExtractor(patterns['date'])
+_ARTICLE_NO_EXTRACTOR: Final = RegexPatternExtractor(patterns['article_no'])
+_PAIRED_BRACKETS_EXTRACTOR: Final = RegexPatternExtractor(patterns['paired_brackets'])
+
+
+def extract_paired_buckets(text: str) -> dict[EntityType, list[Entity]]:
+    mapping = {
+        EntityType.LAW_ABBR: _ABBR_DEFINITION_EXTRACTOR,
+        EntityType.ISSUE_NO: _ISSUE_NO_EXTRACTOR,
+    }
+    entity_mapping = defaultdict(list)
+    for segment in _PAIRED_BRACKETS_EXTRACTOR.extract(text):
+        for entity_type, extractor in mapping.items():
+            for x in extractor.extract(segment.text):
+                x.start += segment.start
+                entity_mapping[entity_type].append(Entity.of(segment, entity_type))
+    return entity_mapping
