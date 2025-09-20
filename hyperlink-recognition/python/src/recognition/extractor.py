@@ -1,13 +1,12 @@
-from pickle import TRUE
 import re
 from abc import ABC, abstractmethod
 from collections import defaultdict, deque
-from collections.abc import Callable, Iterable
-from typing import Final, Literal, cast, override
+from collections.abc import Callable, Iterable, Iterator
+from typing import Final, Literal, Self, override
 
 import ahocorasick  # type: ignore  # noqa: PGH003
 
-from recognition.datamodels import Entity, EntityType, Segment
+from recognition.datamodels import Segment
 from recognition.patterns import patterns
 
 
@@ -237,6 +236,15 @@ class KeywordExtractor(Extractor):
 
 
 class RegexPatternExtractor(Extractor):
+    """
+    Extract entities using regex patterns.
+
+    Args:
+        patterns: Single regex pattern or list of patterns to match.
+        stop_on_first: If True, stop after first pattern finds matches.
+        group: Which regex group to extract (0 for entire match).
+    """
+
     def __init__(
         self,
         patterns: re.Pattern[str] | list[re.Pattern[str]],
@@ -249,7 +257,7 @@ class RegexPatternExtractor(Extractor):
         self._patterns = patterns if isinstance(patterns, list) else [patterns]
 
     @override
-    def extract(self, text: str) -> Iterable[Segment]:
+    def extract(self, text: str) -> Iterator[Segment]:
         found_any = False
         for pattern in self._patterns:
             for matcher in pattern.finditer(text):
@@ -261,6 +269,68 @@ class RegexPatternExtractor(Extractor):
                 )
             if self._stop_on_first and found_any:
                 return
+
+
+class ChainedExtractor(Extractor):
+    """
+    Chains multiple extractors to process text in hierarchical levels.
+
+    Each level's extractors process the segments found by the previous level.
+    """
+
+    def __init__(self, *extractors: Extractor) -> None:
+        if not extractors:
+            raise ValueError("Must provide at least one extractor.")
+        self._levels = [extractors]
+
+    def next(self, *extractors: Extractor) -> Self:
+        if not extractors:
+            raise ValueError("Must provide at least one extractor.")
+        self._levels.append(extractors)
+        return self
+
+    @override
+    def extract(self, text: str) -> list[Segment]:
+        segments = [Segment(text, 0, len(text))]
+        for extractors in self._levels:
+            segments_list = self._process_level(segments, extractors)
+            segments = self._flatten(segments_list)
+        return segments
+
+    def extract_with_tuple_result(self, text: str) -> tuple[list[Segment], ...]:
+        segments = [Segment(text, 0, len(text))]
+
+        for level in range(len(self._levels) - 1):
+            segments_list = self._process_level(segments, self._levels[level])
+            segments = self._flatten(segments_list)
+
+        return tuple(self._process_level(segments, self._levels[-1]))
+
+    def _process_level(
+        self, segments: list[Segment], extractors: tuple[Extractor, ...]
+    ) -> list[list[Segment]]:
+        result = []
+
+        for extractor in extractors:
+            next_segments: list[Segment] = []
+
+            for segment in segments:
+                offset = segment.start
+                for extracted_segment in extractor.extract(segment.text):
+                    # Adjust positions relative to original text
+                    adjusted_segment = Segment(
+                        extracted_segment.text,
+                        extracted_segment.start + offset,
+                        extracted_segment.end + offset,
+                    )
+                    next_segments.append(adjusted_segment)
+
+            result.append(next_segments)
+
+        return result
+
+    def _flatten(self, segments_list: list[list[Segment]]) -> list[Segment]:
+        return [segment for segments in segments_list for segment in segments]
 
 
 _ISSUE_NO_EXTRACTOR: Final = RegexPatternExtractor(
@@ -275,17 +345,3 @@ _ABBR_DEFINITION_EXTRACTOR: Final = RegexPatternExtractor(
 _DATE_EXTRACTOR: Final = RegexPatternExtractor(patterns['date'])
 _ARTICLE_NO_EXTRACTOR: Final = RegexPatternExtractor(patterns['article_no'])
 _PAIRED_BRACKETS_EXTRACTOR: Final = RegexPatternExtractor(patterns['paired_brackets'])
-
-
-def extract_paired_buckets(text: str) -> dict[EntityType, list[Entity]]:
-    mapping = {
-        EntityType.LAW_ABBR: _ABBR_DEFINITION_EXTRACTOR,
-        EntityType.ISSUE_NO: _ISSUE_NO_EXTRACTOR,
-    }
-    entity_mapping = defaultdict(list)
-    for segment in _PAIRED_BRACKETS_EXTRACTOR.extract(text):
-        for entity_type, extractor in mapping.items():
-            for x in extractor.extract(segment.text):
-                x.start += segment.start
-                entity_mapping[entity_type].append(Entity.of(segment, entity_type))
-    return entity_mapping
