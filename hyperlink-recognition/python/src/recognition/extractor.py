@@ -1,13 +1,24 @@
+import logging
 import re
 from abc import ABC, abstractmethod
 from collections import defaultdict, deque
 from collections.abc import Callable, Iterable, Iterator
-from typing import Final, Literal, Self, override
+from itertools import chain
+from os import getenv
+from typing import Final, Literal, override
 
 import ahocorasick  # type: ignore  # noqa: PGH003
 
-from recognition.datamodels import Segment
+from recognition.datamodels import Entity, EntityType, Segment
 from recognition.patterns import patterns
+from utils.io_util import load_resource_json
+
+__author__ = "xbhel"
+__email__ = "xbhel@outlook.com"
+
+
+logger = logging.getLogger(__name__)
+logger.setLevel(getenv("LOG_LEVEL", logging.DEBUG))
 
 
 class Extractor(ABC):
@@ -283,11 +294,13 @@ class ChainedExtractor(Extractor):
             raise ValueError("Must provide at least one extractor.")
         self._levels = [extractors]
 
-    def next(self, *extractors: Extractor) -> Self:
+    def next(self, *extractors: Extractor) -> "ChainedExtractor":
         if not extractors:
             raise ValueError("Must provide at least one extractor.")
-        self._levels.append(extractors)
-        return self
+        # Create with first level extractors
+        new_extractor = ChainedExtractor(*self._levels[0])
+        new_extractor._levels = [*self._levels, extractors]
+        return new_extractor
 
     @override
     def extract(self, text: str) -> list[Segment]:
@@ -333,15 +346,119 @@ class ChainedExtractor(Extractor):
         return [segment for segments in segments_list for segment in segments]
 
 
-_ISSUE_NO_EXTRACTOR: Final = RegexPatternExtractor(
-    patterns['issue_nos'], stop_on_first=True, group=1
-)
-_LAW_TITLE_EXTRACTOR: Final = PairedSymbolExtractor(
-    ("《", "》"), strategy="outermost", allow_fallback_on_unclosed=True
-)
-_ABBR_DEFINITION_EXTRACTOR: Final = RegexPatternExtractor(
-    patterns['abbr_definition'], group=1
-)
+_KEYWORD_MAPPING_TABLE: dict[str, list[str]] = load_resource_json("KeywordMapping.json")
 _DATE_EXTRACTOR: Final = RegexPatternExtractor(patterns['date'])
+_CASE_NO_EXTRACTOR: Final = RegexPatternExtractor(patterns['case_no'])
+_ISSUE_NO_EXTRACTOR = RegexPatternExtractor(patterns['issue_nos'], True, 1)
 _ARTICLE_NO_EXTRACTOR: Final = RegexPatternExtractor(patterns['article_no'])
+_LAW_TITLE_EXTRACTOR = PairedSymbolExtractor(("《", "》"), False, "outermost", True)
+_ABBR_DEFINITION_EXTRACTOR = RegexPatternExtractor(patterns['abbr_definition'], group=1)
 _PAIRED_BRACKETS_EXTRACTOR: Final = RegexPatternExtractor(patterns['paired_brackets'])
+
+
+def extract_entities(text: str) -> dict[EntityType, list[Entity]]:
+    """
+    Extracts all relevant entities from the input text, including those found via
+    bracketed expressions, keyword-based extraction, and direct pattern matching.
+
+    Returns a mapping from EntityType to a list of Entity objects.
+    """
+    # Extract entities within paired brackets (e.g., Issue No, Law Abbreviation)
+    bracket_entity_map = _extract_bracketed_entities(text)
+    abbr_entities = bracket_entity_map.pop(EntityType.LAW_ABBR, [])
+    abbr_keywords = [entity.text for entity in abbr_entities]
+
+    # Extract entities by keywords, using abbreviations found in brackets as keywords
+    keyword_entity_map = _extract_keyword_entities(
+        text, {EntityType.LAW_ABBR.name: abbr_keywords}
+    )
+
+    # Extract entities using direct pattern-based extractors
+    pattern_entity_map = _extract_pattern_entities(text)
+
+    # Merge all entity mappings, giving precedence to later updates
+    return {**pattern_entity_map, **bracket_entity_map, **keyword_entity_map}
+
+
+def _extract_pattern_entities(text: str) -> dict[EntityType, list[Entity]]:
+    """
+    Extracts entities from the text using predefined pattern-based extractors.
+    """
+    entity_type_to_extractor: dict[EntityType, Extractor] = {
+        EntityType.DATE: _DATE_EXTRACTOR,
+        EntityType.CASE_NO: _CASE_NO_EXTRACTOR,
+        EntityType.LAW_TITLE: _LAW_TITLE_EXTRACTOR,
+        EntityType.LAW_ARTICLE_NO: _ARTICLE_NO_EXTRACTOR,
+    }
+    entities_by_type: dict[EntityType, list[Entity]] = defaultdict(list)
+
+    for entity_type, extractor in entity_type_to_extractor.items():
+        segments = extractor.extract(text)
+        entities_by_type[entity_type] = [
+            Entity.of(segment, entity_type) for segment in segments
+        ]
+
+    return entities_by_type
+
+
+def _extract_bracketed_entities(text: str) -> dict[EntityType, list[Entity]]:
+    """
+    Extracts entities that are defined within paired brackets,
+    such as Issue No and Law Abbreviation.
+    """
+    bracketed_type_to_extractor = {
+        EntityType.ISSUE_NO: _ISSUE_NO_EXTRACTOR,
+        EntityType.LAW_ABBR: _ABBR_DEFINITION_EXTRACTOR,
+    }
+
+    bracket_segments = _PAIRED_BRACKETS_EXTRACTOR.extract(text)
+    entities_by_type: dict[EntityType, list[Entity]] = defaultdict(list)
+
+    for bracket_segment in bracket_segments:
+        offset = bracket_segment.start
+        inner_text = bracket_segment.text
+
+        for entity_type, extractor in bracketed_type_to_extractor.items():
+            for entity in extractor.extract(inner_text):
+                adjusted_entity = Entity(
+                    text=entity.text,
+                    start=entity.start + offset,
+                    end=entity.end + offset,
+                    entity_type=entity_type,
+                )
+                entities_by_type[entity_type].append(adjusted_entity)
+
+    return entities_by_type
+
+
+def _extract_keyword_entities(
+    text: str, keywords_by_label: dict[str, list[str]]
+) -> dict[EntityType, list[Entity]]:
+    """
+    Extracts entities from the text based on provided keyword mappings.
+    The mapping should be from label (str) to a list of keywords (str).
+    """
+    # Build a reverse mapping from keyword to label
+    keyword_to_label = {
+        k: label for label, kws in keywords_by_label.items() for k in kws
+    }
+    extractor = KeywordExtractor(keywords=keyword_to_label.keys(), ignore_overlaps=True)
+    found_segments = extractor.extract(text)
+
+    entities_by_type: dict[EntityType, list[Entity]] = defaultdict(list)
+
+    for segment in found_segments:
+        label = keyword_to_label.get(segment.text)
+        if label is None:
+            raise ValueError(f"Unknown keyword: {segment.text}")
+
+        entity_type_name = label.upper()
+        if entity_type_name in EntityType.__members__:
+            entity_type = EntityType[entity_type_name]
+            entities_by_type[entity_type].append(Entity.of(segment, entity_type))
+        else:
+            logger.debug(
+                f"Ignored entity with unknown type '{entity_type_name}': {segment}"
+            )
+
+    return entities_by_type

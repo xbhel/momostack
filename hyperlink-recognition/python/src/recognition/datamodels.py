@@ -34,7 +34,7 @@ class Segment:
     end: int  # exclusive
 
     def overlaps_with(self, other: Self) -> bool:
-        return self.start < other.end & self.end > other.start
+        return self.start < other.end and self.end > other.start
 
     def contains(self, other: Self) -> bool:
         return self.start <= other.start and self.end >= other.end

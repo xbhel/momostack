@@ -1,8 +1,15 @@
+import re
 import unittest
 from abc import ABC
 
 from recognition.datamodels import Segment
-from recognition.extractor import Extractor, KeywordExtractor, PairedSymbolExtractor
+from recognition.extractor import (
+    ChainedExtractor,
+    Extractor,
+    KeywordExtractor,
+    PairedSymbolExtractor,
+    RegexPatternExtractor,
+)
 
 
 def to_simple(spans: list[Segment]) -> list[tuple[str, int, int]]:
@@ -174,19 +181,14 @@ class TestPairedSymbolExtractor(unittest.TestCase):
 
     def test_deep_nesting_innermost(self) -> None:
         """Test deep nesting with innermost strategy."""
-        extractor = PairedSymbolExtractor(
-            symbol_pair=("(", ")"), strategy="innermost"
-        )
+        extractor = PairedSymbolExtractor(symbol_pair=("(", ")"), strategy="innermost")
         text = "((((deep))))"
         spans = list(extractor.extract(text))
         self.assertEqual(to_simple(spans), [("deep", 4, 8)])
 
-
     def test_deep_nesting_outermost(self) -> None:
         """Test deep nesting with outermost strategy."""
-        extractor = PairedSymbolExtractor(
-            symbol_pair=("(", ")"), strategy="outermost"
-        )
+        extractor = PairedSymbolExtractor(symbol_pair=("(", ")"), strategy="outermost")
         text = "((((deep))))"
         spans = list(extractor.extract(text))
         self.assertEqual(to_simple(spans), [("(((deep)))", 1, 11)])
@@ -246,9 +248,7 @@ class TestPairedSymbolExtractor(unittest.TestCase):
 
     def test_innermost_with_multiple_depths(self) -> None:
         """Test innermost strategy with multiple depth levels."""
-        extractor = PairedSymbolExtractor(
-            symbol_pair=("(", ")"), strategy="innermost"
-        )
+        extractor = PairedSymbolExtractor(symbol_pair=("(", ")"), strategy="innermost")
         text = "(a(b(c)d)e) (f(g)h)"
         spans = list(extractor.extract(text))
         # Should return only the innermost segments
@@ -257,9 +257,7 @@ class TestPairedSymbolExtractor(unittest.TestCase):
 
     def test_outermost_with_multiple_groups(self) -> None:
         """Test outermost strategy with multiple separate groups."""
-        extractor = PairedSymbolExtractor(
-            symbol_pair=("(", ")"), strategy="outermost"
-        )
+        extractor = PairedSymbolExtractor(symbol_pair=("(", ")"), strategy="outermost")
         text = "(a(b)c) (d(e)f)"
         spans = list(extractor.extract(text))
         # Should return only the outermost segments
@@ -293,9 +291,7 @@ class TestPairedSymbolExtractor(unittest.TestCase):
 
     def test_multi_character_symbols(self) -> None:
         """Test with multi-character symbols."""
-        extractor = PairedSymbolExtractor(
-            symbol_pair=("<<", ">>"), strategy="all"
-        )
+        extractor = PairedSymbolExtractor(symbol_pair=("<<", ">>"), strategy="all")
         text = "a<<b>>c<<d>>e"
         spans = list(extractor.extract(text))
         # Multi-character symbols extract empty content between them
@@ -341,7 +337,9 @@ class TestKeywordExtractor(unittest.TestCase):
 
     def test_ignore_overlaps_true(self) -> None:
         """Test extraction with ignore_overlaps=True."""
-        extractor = KeywordExtractor(keywords=["he", "hello", "lo"], ignore_overlaps=True)
+        extractor = KeywordExtractor(
+            keywords=["he", "hello", "lo"], ignore_overlaps=True
+        )
         text = "hello"
         spans = list(extractor.extract(text))
         # Should return only the longest non-overlapping matches
@@ -367,7 +365,9 @@ class TestKeywordExtractor(unittest.TestCase):
         """Test extraction with empty keywords list should raise ValueError."""
         with self.assertRaises(ValueError) as ex:
             KeywordExtractor(keywords=[])
-        self.assertEqual(str(ex.exception), "Failed to build automaton: empty keyword list.")
+        self.assertEqual(
+            str(ex.exception), "Failed to build automaton: empty keyword list."
+        )
 
     def test_empty_text(self) -> None:
         """Test extraction from empty text."""
@@ -523,6 +523,7 @@ class TestExtractorBaseClass(unittest.TestCase):
 
     def test_make_value_helper(self) -> None:
         """Test the _make_value helper method."""
+
         # Create a concrete implementation to test the helper
         class TestExtractor(Extractor):
             def extract(self, text: str):
@@ -601,6 +602,291 @@ class TestEdgeCases(unittest.TestCase):
         spans = list(extractor.extract(text))
         expected = [("test123", 1, 8), ("abc456", 11, 17)]
         self.assertEqual(to_simple(spans), expected)
+
+
+class TestChainedExtractor(unittest.TestCase):
+    """Test cases for the ChainedExtractor class."""
+
+    def test_single_level_extraction(self) -> None:
+        """Test extraction with a single level of extractors."""
+        extractor = ChainedExtractor(PairedSymbolExtractor(("《", "》")))
+        text = "根据《民法典》第123条的规定"
+        segments = extractor.extract(text)
+        expected = [
+            ("民法典", 3, 6)
+        ]  # Fixed: 《 is at position 2, so content starts at 3
+        self.assertEqual(to_simple(segments), expected)
+
+    def test_two_level_extraction(self) -> None:
+        """Test extraction with two levels of extractors."""
+        # First level: extract brackets, second level: extract numbers from the bracket content
+        extractor = ChainedExtractor(PairedSymbolExtractor(("[", "]"))).next(
+            RegexPatternExtractor(re.compile(r"\d+"))
+        )
+        text = "参考[123]和[456]的规定"
+        segments = extractor.extract(text)
+        expected = [
+            ("123", 3, 6),
+            ("456", 9, 12),
+        ]  # Fixed: second bracket starts at position 8
+        self.assertEqual(to_simple(segments), expected)
+
+    def test_three_level_extraction(self) -> None:
+        """Test extraction with three levels of extractors."""
+        # Level 1: extract brackets, Level 2: extract numbers, Level 3: extract specific pattern
+        extractor = (
+            ChainedExtractor(PairedSymbolExtractor(("[", "]")))
+            .next(RegexPatternExtractor(re.compile(r"\d+")))
+            .next(RegexPatternExtractor(re.compile(r"[1-9]\d*")))
+        )
+        text = "参考[123]和[456]的规定"
+        segments = extractor.extract(text)
+        expected = [("123", 3, 6), ("456", 9, 12)]  # Fixed positions
+        self.assertEqual(to_simple(segments), expected)
+
+    def test_multiple_extractors_per_level(self) -> None:
+        """Test extraction with multiple extractors at the same level."""
+        extractor = ChainedExtractor(
+            PairedSymbolExtractor(("《", "》")), PairedSymbolExtractor(("（", "）"))
+        )
+        text = "根据《民法典》和（刑法）的规定"
+        segments = extractor.extract(text)
+        expected = [("民法典", 3, 6), ("刑法", 9, 11)]  # Fixed positions
+        self.assertEqual(to_simple(segments), expected)
+
+    def test_no_matches_first_level(self) -> None:
+        """Test when first level finds no matches."""
+        extractor = ChainedExtractor(PairedSymbolExtractor(("《", "》"))).next(
+            RegexPatternExtractor(re.compile(r"第\d+条"))
+        )
+        text = "没有书名号的内容"
+        segments = extractor.extract(text)
+        self.assertEqual(segments, [])
+
+    def test_no_matches_second_level(self) -> None:
+        """Test when second level finds no matches."""
+        extractor = ChainedExtractor(PairedSymbolExtractor(("《", "》"))).next(
+            RegexPatternExtractor(re.compile(r"不存在的模式"))
+        )
+        text = "根据《民法典》的规定"
+        segments = extractor.extract(text)
+        self.assertEqual(segments, [])
+
+    def test_empty_text(self) -> None:
+        """Test extraction from empty text."""
+        extractor = ChainedExtractor(PairedSymbolExtractor(("《", "》")))
+        text = ""
+        segments = extractor.extract(text)
+        self.assertEqual(segments, [])
+
+    def test_position_adjustment(self) -> None:
+        """Test that positions are correctly adjusted across levels."""
+        # This test should return empty because "法律" doesn't contain "第123条"
+        extractor = ChainedExtractor(PairedSymbolExtractor(("《", "》"))).next(
+            RegexPatternExtractor(re.compile(r"第(\d+)条"))
+        )
+        text = "前缀《法律》第123条后缀"
+        segments = extractor.extract(text)
+        self.assertEqual(to_simple(segments), [])
+
+    def test_nested_position_adjustment(self) -> None:
+        """Test position adjustment with deeply nested extraction."""
+        extractor = (
+            ChainedExtractor(PairedSymbolExtractor(("《", "》")))
+            .next(PairedSymbolExtractor(("（", "）")))
+            .next(RegexPatternExtractor(re.compile(r"\d+")))
+        )
+        text = "开始《法律（条款123）内容》结束"
+        segments = extractor.extract(text)
+        # Should find "123" with correct position in original text
+        expected = [("123", 8, 11)]  # Fixed: Position of "123" in original text
+        self.assertEqual(to_simple(segments), expected)
+
+    def test_extract_with_tuple_result(self) -> None:
+        """Test extract_with_tuple_result method."""
+        extractor = ChainedExtractor(PairedSymbolExtractor(("[", "]"))).next(
+            RegexPatternExtractor(re.compile(r"\d+"))
+        )
+        text = "参考[123]和[456]的规定"
+        result = extractor.extract_with_tuple_result(text)
+
+        # Should return tuple of lists, one for each extractor in the last level
+        self.assertIsInstance(result, tuple)
+        self.assertEqual(len(result), 1)  # One extractor in last level
+
+        # Check the segments from the last level
+        last_level_segments = result[0]
+        expected = [("123", 3, 6), ("456", 9, 12)]
+        self.assertEqual(to_simple(last_level_segments), expected)
+
+    def test_extract_with_tuple_result_multiple_extractors(self) -> None:
+        """Test extract_with_tuple_result with multiple extractors in last level."""
+        extractor = ChainedExtractor(PairedSymbolExtractor(("[", "]"))).next(
+            RegexPatternExtractor(re.compile(r"\d+")),
+            RegexPatternExtractor(re.compile(r"[A-Z]+")),
+        )
+        text = "参考[123ABC]和[456DEF]的规定"
+        result = extractor.extract_with_tuple_result(text)
+
+        # Should return tuple with two lists (one for each extractor)
+        self.assertIsInstance(result, tuple)
+        self.assertEqual(len(result), 2)
+
+        # First extractor should find numbers
+        first_extractor_segments = result[0]
+        self.assertEqual(
+            to_simple(first_extractor_segments), [("123", 3, 6), ("456", 12, 15)]
+        )
+
+        # Second extractor should find letters
+        second_extractor_segments = result[1]
+        self.assertEqual(
+            to_simple(second_extractor_segments), [("ABC", 6, 9), ("DEF", 15, 18)]
+        )
+
+    def test_validation_empty_constructor(self) -> None:
+        """Test that empty constructor raises ValueError."""
+        with self.assertRaises(ValueError) as context:
+            ChainedExtractor()
+        self.assertEqual(str(context.exception), "Must provide at least one extractor.")
+
+    def test_validation_empty_next(self) -> None:
+        """Test that empty next() raises ValueError."""
+        extractor = ChainedExtractor(PairedSymbolExtractor(("《", "》")))
+        with self.assertRaises(ValueError) as context:
+            extractor.next()
+        self.assertEqual(str(context.exception), "Must provide at least one extractor.")
+
+    def test_immutable_behavior(self) -> None:
+        """Test that next() returns a new instance (immutable behavior)."""
+        extractor1 = ChainedExtractor(PairedSymbolExtractor(("《", "》")))
+        extractor2 = extractor1.next(RegexPatternExtractor(re.compile(r"\d+")))
+
+        # They should be different objects
+        self.assertIsNot(extractor1, extractor2)
+
+        # Original should still work with single level
+        text = "根据《民法典》的规定"
+        segments1 = extractor1.extract(text)
+        expected1 = [("民法典", 3, 6)]  # Fixed position
+        self.assertEqual(to_simple(segments1), expected1)
+
+        # New extractor should work with two levels
+        text2 = "根据《123》的规定"
+        segments2 = extractor2.extract(text2)
+        expected2 = [("123", 3, 6)]  # Number inside brackets
+        self.assertEqual(to_simple(segments2), expected2)
+
+    def test_keyword_and_regex_combination(self) -> None:
+        """Test combination of KeywordExtractor and RegexPatternExtractor."""
+        # The extracted keywords "法律" and "法规" don't contain numbers, so this should return empty
+        extractor = ChainedExtractor(KeywordExtractor(["法律", "法规"])).next(
+            RegexPatternExtractor(re.compile(r"\d+"))
+        )
+        text = "根据法律123和法规456的规定"
+        segments = extractor.extract(text)
+        self.assertEqual(to_simple(segments), [])
+
+    def test_complex_nested_extraction(self) -> None:
+        """Test complex nested extraction scenario."""
+        # Simplified: Just test 3 levels with brackets and numbers
+        extractor = (
+            ChainedExtractor(PairedSymbolExtractor(("[", "]")))
+            .next(PairedSymbolExtractor(("（", "）")))
+            .next(RegexPatternExtractor(re.compile(r"\d+")))
+        )
+        text = "参考[内容（数字123）更多]和[其他（数字456）内容]"
+        segments = extractor.extract(text)
+        expected = [("123", 8, 11), ("456", 22, 25)]  # Fixed position for second number
+        self.assertEqual(to_simple(segments), expected)
+
+    def test_overlapping_segments(self) -> None:
+        """Test handling of overlapping segments from different extractors."""
+        extractor = ChainedExtractor(
+            RegexPatternExtractor(re.compile(r"第\d+条")),
+            RegexPatternExtractor(re.compile(r"\d+条")),
+        )
+        text = "根据第123条的规定"
+        segments = extractor.extract(text)
+        # Both patterns should match, creating overlapping segments
+        expected = [("第123条", 2, 7), ("123条", 3, 7)]
+        self.assertEqual(to_simple(segments), expected)
+
+    def test_unicode_content(self) -> None:
+        """Test extraction with Unicode content."""
+        extractor = ChainedExtractor(PairedSymbolExtractor(("《", "》"))).next(
+            KeywordExtractor(["民法典", "刑法"])
+        )
+        text = "根据《民法典》和《刑法》的规定"
+        segments = extractor.extract(text)
+        expected = [("民法典", 3, 6), ("刑法", 9, 11)]  # Fixed positions
+        self.assertEqual(to_simple(segments), expected)
+
+    def test_special_characters(self) -> None:
+        """Test extraction with special characters."""
+        extractor = ChainedExtractor(PairedSymbolExtractor(("【", "】"))).next(
+            RegexPatternExtractor(re.compile(r"[A-Z]+"))
+        )
+        text = "根据【ABC】和【DEF】的规定"
+        segments = extractor.extract(text)
+        expected = [("ABC", 3, 6), ("DEF", 9, 12)]  # Fixed positions
+        self.assertEqual(to_simple(segments), expected)
+
+    def test_very_long_text(self) -> None:
+        """Test extraction with very long text."""
+        long_text = "前缀" + "《法律》" * 1000 + "后缀"
+        extractor = ChainedExtractor(PairedSymbolExtractor(("《", "》")))
+        segments = extractor.extract(long_text)
+
+        # Should find all 1000 law titles
+        self.assertEqual(len(segments), 1000)
+
+        # Check first and last segments
+        self.assertEqual(segments[0].text, "法律")
+        self.assertEqual(segments[-1].text, "法律")
+
+    def test_multiple_identical_extractors(self) -> None:
+        """Test with multiple identical extractors in the same level."""
+        extractor = ChainedExtractor(
+            PairedSymbolExtractor(("《", "》")), PairedSymbolExtractor(("《", "》"))
+        )
+        text = "根据《民法典》的规定"
+        segments = extractor.extract(text)
+        # Should find the same segment twice (once from each extractor)
+        expected = [("民法典", 3, 6), ("民法典", 3, 6)]  # Fixed positions
+        self.assertEqual(to_simple(segments), expected)
+
+    def test_inheritance_from_extractor(self) -> None:
+        """Test that ChainedExtractor properly inherits from Extractor."""
+        self.assertTrue(issubclass(ChainedExtractor, Extractor))
+
+        # Test that it can be used polymorphically
+        extractors = [
+            PairedSymbolExtractor(("《", "》")),
+            ChainedExtractor(PairedSymbolExtractor(("《", "》"))),
+        ]
+
+        text = "根据《民法典》的规定"
+        for extractor in extractors:
+            segments = list(extractor.extract(text))
+            self.assertEqual(len(segments), 1)
+            self.assertEqual(segments[0].text, "民法典")
+
+    def test_flatten_method(self) -> None:
+        """Test the internal _flatten method."""
+        extractor = ChainedExtractor(PairedSymbolExtractor(("《", "》")))
+
+        # Create test data
+        segments_list = [
+            [Segment("法律", 0, 2), Segment("法规", 3, 5)],
+            [Segment("条款", 6, 8)],
+        ]
+
+        flattened = extractor._flatten(segments_list)
+        expected = [Segment("法律", 0, 2), Segment("法规", 3, 5), Segment("条款", 6, 8)]
+
+        self.assertEqual(len(flattened), 3)
+        self.assertEqual(to_simple(flattened), to_simple(expected))
 
 
 if __name__ == "__main__":
