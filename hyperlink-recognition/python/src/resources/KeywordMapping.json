@@ -1,6 +1,6 @@
 {
-    "law_self": [],
-    "law_abbr": [],
-    "excluded": [],
-    "promulgators": []
+    "LAW_ABBR": ["该法"],
+    "LAW_SELF": ["本法", "本条例", "本规定"],
+    "PROMULGATOR": ["全国人民代表大会", "国务院"],
+    "EXCLUDED": []
 }

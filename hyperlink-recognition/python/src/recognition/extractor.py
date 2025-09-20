@@ -1,24 +1,23 @@
 import logging
+import os
 import re
 from abc import ABC, abstractmethod
 from collections import defaultdict, deque
 from collections.abc import Callable, Iterable, Iterator
-from itertools import chain
-from os import getenv
 from typing import Final, Literal, override
 
 import ahocorasick  # type: ignore  # noqa: PGH003
 
 from recognition.datamodels import Entity, EntityType, Segment
 from recognition.patterns import patterns
-from utils.io_util import load_resource_json
+from utils import io_util
 
 __author__ = "xbhel"
 __email__ = "xbhel@outlook.com"
 
 
 logger = logging.getLogger(__name__)
-logger.setLevel(getenv("LOG_LEVEL", logging.DEBUG))
+logger.setLevel(os.getenv("LOG_LEVEL", logging.DEBUG))
 
 
 class Extractor(ABC):
@@ -346,7 +345,6 @@ class ChainedExtractor(Extractor):
         return [segment for segments in segments_list for segment in segments]
 
 
-_KEYWORD_MAPPING_TABLE: dict[str, list[str]] = load_resource_json("KeywordMapping.json")
 _DATE_EXTRACTOR: Final = RegexPatternExtractor(patterns['date'])
 _CASE_NO_EXTRACTOR: Final = RegexPatternExtractor(patterns['case_no'])
 _ISSUE_NO_EXTRACTOR = RegexPatternExtractor(patterns['issue_nos'], True, 1)
@@ -354,6 +352,9 @@ _ARTICLE_NO_EXTRACTOR: Final = RegexPatternExtractor(patterns['article_no'])
 _LAW_TITLE_EXTRACTOR = PairedSymbolExtractor(("《", "》"), False, "outermost", True)
 _ABBR_DEFINITION_EXTRACTOR = RegexPatternExtractor(patterns['abbr_definition'], group=1)
 _PAIRED_BRACKETS_EXTRACTOR: Final = RegexPatternExtractor(patterns['paired_brackets'])
+_KEYWORD_MAPPING: dict[str, list[str]] = io_util.load_resource_json(
+    "KeywordMapping.json"
+)
 
 
 def extract_entities(text: str) -> dict[EntityType, list[Entity]]:
@@ -365,13 +366,13 @@ def extract_entities(text: str) -> dict[EntityType, list[Entity]]:
     """
     # Extract entities within paired brackets (e.g., Issue No, Law Abbreviation)
     bracket_entity_map = _extract_bracketed_entities(text)
-    abbr_entities = bracket_entity_map.pop(EntityType.LAW_ABBR, [])
-    abbr_keywords = [entity.text for entity in abbr_entities]
 
     # Extract entities by keywords, using abbreviations found in brackets as keywords
-    keyword_entity_map = _extract_keyword_entities(
-        text, {EntityType.LAW_ABBR.name: abbr_keywords}
-    )
+    abbr_entities = bracket_entity_map.pop(EntityType.LAW_ABBR, [])
+    abbr_keywords = [entity.text for entity in abbr_entities]
+    keywords = dict(_KEYWORD_MAPPING)
+    keywords.setdefault(EntityType.LAW_ABBR.name, []).extend(abbr_keywords)
+    keyword_entity_map = _extract_keyword_entities(text, keywords)
 
     # Extract entities using direct pattern-based extractors
     pattern_entity_map = _extract_pattern_entities(text)
@@ -462,3 +463,15 @@ def _extract_keyword_entities(
             )
 
     return entities_by_type
+
+
+if __name__ == '__main__':
+    import json
+    from dataclasses import asdict
+
+    entities_by_type = extract_entities("A《X》B《Y》C")
+    entities_dict_by_type = {
+        k: [asdict(e) for e in entities] for k, entities in entities_by_type.items()
+    }
+
+    print(json.dumps(entities_dict_by_type, indent=2))
