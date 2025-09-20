@@ -2,6 +2,11 @@
 
 A comprehensive reference guide for common Python patterns, best practices, and advanced concepts. This document covers practical examples and real-world usage patterns that every Python developer should know.
 
+Useful links:
+
+- [PEP 8 – Style Guide for Python Code](https://peps.python.org/pep-0008/)
+- [Google Python Style Guide](https://google.github.io/styleguide/pyguide.html)
+
 ## Table of Contents
 
 - [Python Notes](#python-notes)
@@ -33,7 +38,6 @@ A comprehensive reference guide for common Python patterns, best practices, and 
     - [Plugin System](#plugin-system)
     - [Key Points and Best Practices](#key-points-and-best-practices)
     - [Common Use Cases](#common-use-cases)
-  - [How to define constants with multiple names](https://github.com/psf/requests/blob/main/src/requests/status_codes.py)
 
 ---
 
