@@ -463,15 +463,3 @@ def _extract_keyword_entities(
             )
 
     return entities_by_type
-
-
-if __name__ == '__main__':
-    import json
-    from dataclasses import asdict
-
-    entities_by_type = extract_entities("A《X》B《Y》C")
-    entities_dict_by_type = {
-        k: [asdict(e) for e in entities] for k, entities in entities_by_type.items()
-    }
-
-    print(json.dumps(entities_dict_by_type, indent=2))
