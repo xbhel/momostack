@@ -15,8 +15,7 @@ class TestResolveOverlaps(unittest.TestCase):
 
     def test_empty_input(self) -> None:
         """Test that empty input returns empty list."""
-        result = resolve_overlaps([], "longest")
-        self.assertEqual(result, [])
+        self.assertEqual(resolve_overlaps([], "longest"), [])
 
     def test_single_segment(self) -> None:
         """Test that single segment is returned unchanged."""

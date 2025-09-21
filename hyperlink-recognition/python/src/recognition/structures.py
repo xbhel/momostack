@@ -8,8 +8,8 @@ class Comparable(Protocol):
     def __lt__(self, other: Any) -> bool: ...
 
 
-_KT = TypeVar("_KT", bound=Comparable)
 _VT = TypeVar("_VT")
+_KT = TypeVar("_KT", bound=Comparable)
 
 
 class LookupDict(Mapping[_KT, _VT], Generic[_KT, _VT]):

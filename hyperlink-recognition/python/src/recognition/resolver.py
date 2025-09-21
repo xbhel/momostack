@@ -1,14 +1,16 @@
 from collections.abc import Iterable
-from typing import Literal
+from typing import Literal, TypeVar
 
 from recognition.datamodels import Segment
 
+_T = TypeVar("_T", bound=Segment)
+
 
 def resolve_overlaps(
-    iterable: Iterable[Segment],
+    iterable: Iterable[_T],
     strategy: Literal["longest", "earliest", "earliest_longest"],
     direct_only: bool = False,
-) -> list[Segment]:
+) -> list[_T]:
     """
     Resolve overlapping segments according to the specified strategy.
 
@@ -62,8 +64,8 @@ def resolve_overlaps(
 
 
 def _resolve_overlaps_keep_longest(
-    segments: list[Segment], direct_only: bool = False
-) -> list[Segment]:
+    segments: list[_T], direct_only: bool = False
+) -> list[_T]:
     result = []
     longest = segments[0]
     group_end = longest.end
@@ -88,8 +90,8 @@ def _resolve_overlaps_keep_longest(
 
 
 def _resolve_overlaps_keep_earliest(
-    segments: list[Segment], direct_only: bool = False
-) -> list[Segment]:
+    segments: list[_T], direct_only: bool = False
+) -> list[_T]:
     result = []
     prev_end = -1
 

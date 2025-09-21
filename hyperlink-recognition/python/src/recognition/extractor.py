@@ -3,13 +3,15 @@ import os
 import re
 from abc import ABC, abstractmethod
 from collections import defaultdict, deque
-from collections.abc import Callable, Iterable, Iterator
-from typing import Final, Literal, override
+from collections.abc import Callable, Generator, Iterable, Iterator
+from itertools import chain
+from typing import Any, Final, Literal, override
 
 import ahocorasick  # type: ignore  # noqa: PGH003
 
 from recognition.datamodels import Entity, EntityType, Segment
 from recognition.patterns import patterns
+from recognition.resolver import resolve_overlaps
 from utils import io_util
 
 __author__ = "xbhel"
@@ -357,7 +359,7 @@ _KEYWORD_MAPPING: dict[str, list[str]] = io_util.load_resource_json(
 )
 
 
-def extract_entities(text: str) -> dict[EntityType, list[Entity]]:
+def extract_entities(text: str) -> list[Entity]:
     """
     Extracts all relevant entities from the input text, including those found via
     bracketed expressions, keyword-based extraction, and direct pattern matching.
@@ -365,101 +367,96 @@ def extract_entities(text: str) -> dict[EntityType, list[Entity]]:
     Returns a mapping from EntityType to a list of Entity objects.
     """
     # Extract entities within paired brackets (e.g., Issue No, Law Abbreviation)
-    bracket_entity_map = _extract_bracketed_entities(text)
+    bracket_entities = list(_extract_bracketed_entities(text))
+    abbr_defs = [x for x in bracket_entities if x.entity_type == EntityType.LAW_ABBR]
 
     # Extract entities by keywords, using abbreviations found in brackets as keywords
-    abbr_entities = bracket_entity_map.pop(EntityType.LAW_ABBR, [])
-    abbr_keywords = [entity.text for entity in abbr_entities]
-    keywords = dict(_KEYWORD_MAPPING)
-    keywords.setdefault(EntityType.LAW_ABBR.name, []).extend(abbr_keywords)
-    keyword_entity_map = _extract_keyword_entities(text, keywords)
+    keyword_entities = _extract_keyword_entities(text, abbr_defs)
 
     # Extract entities using direct pattern-based extractors
-    pattern_entity_map = _extract_pattern_entities(text)
+    pattern_entities = _extract_pattern_entities(text)
 
-    # Merge all entity mappings, giving precedence to later updates
-    return {**pattern_entity_map, **bracket_entity_map, **keyword_entity_map}
+    # Merge all entity mappings, giving precedence to earlier updates.
+    merged_entities = chain(bracket_entities, keyword_entities, pattern_entities)
+
+    # If two entities have the same (start, end), the first one will remain,
+    # so the earlier position has higher priority.
+    return resolve_overlaps(merged_entities, 'longest', direct_only=True)
 
 
-def _extract_pattern_entities(text: str) -> dict[EntityType, list[Entity]]:
+def _extract_pattern_entities(text: str) -> Generator[Entity, Any, None]:
     """
     Extracts entities from the text using predefined pattern-based extractors.
     """
-    entity_type_to_extractor: dict[EntityType, Extractor] = {
+    type_to_extractor: dict[EntityType, Extractor] = {
         EntityType.DATE: _DATE_EXTRACTOR,
         EntityType.CASE_NO: _CASE_NO_EXTRACTOR,
         EntityType.LAW_TITLE: _LAW_TITLE_EXTRACTOR,
         EntityType.LAW_ARTICLE_NO: _ARTICLE_NO_EXTRACTOR,
     }
-    entities_by_type: dict[EntityType, list[Entity]] = defaultdict(list)
 
-    for entity_type, extractor in entity_type_to_extractor.items():
+    for entity_type, extractor in type_to_extractor.items():
         segments = extractor.extract(text)
-        entities_by_type[entity_type] = [
-            Entity.of(segment, entity_type) for segment in segments
-        ]
-
-    return entities_by_type
+        yield from (Entity.of(segment, entity_type) for segment in segments)
 
 
-def _extract_bracketed_entities(text: str) -> dict[EntityType, list[Entity]]:
+def _extract_bracketed_entities(text: str) -> Generator[Entity, Any, None]:
     """
     Extracts entities that are defined within paired brackets,
     such as Issue No and Law Abbreviation.
     """
-    bracketed_type_to_extractor = {
+    type_to_extractor = {
         EntityType.ISSUE_NO: _ISSUE_NO_EXTRACTOR,
         EntityType.LAW_ABBR: _ABBR_DEFINITION_EXTRACTOR,
     }
 
-    bracket_segments = _PAIRED_BRACKETS_EXTRACTOR.extract(text)
-    entities_by_type: dict[EntityType, list[Entity]] = defaultdict(list)
+    found_segments = _PAIRED_BRACKETS_EXTRACTOR.extract(text)
 
-    for bracket_segment in bracket_segments:
-        offset = bracket_segment.start
-        inner_text = bracket_segment.text
+    for segment in found_segments:
+        offset = segment.start
+        inner_text = segment.text
 
-        for entity_type, extractor in bracketed_type_to_extractor.items():
+        for entity_type, extractor in type_to_extractor.items():
             for entity in extractor.extract(inner_text):
-                adjusted_entity = Entity(
+                yield Entity(
                     text=entity.text,
                     start=entity.start + offset,
                     end=entity.end + offset,
                     entity_type=entity_type,
                 )
-                entities_by_type[entity_type].append(adjusted_entity)
-
-    return entities_by_type
 
 
 def _extract_keyword_entities(
-    text: str, keywords_by_label: dict[str, list[str]]
-) -> dict[EntityType, list[Entity]]:
+    text: str, abbr_entities: list[Entity]
+) -> Generator[Entity, Any, None]:
     """
     Extracts entities from the text based on provided keyword mappings.
     The mapping should be from label (str) to a list of keywords (str).
     """
     # Build a reverse mapping from keyword to label
-    keyword_to_label = {
-        k: label for label, kws in keywords_by_label.items() for k in kws
+    keyword_to_type = {
+        **{k: label for label, kws in _KEYWORD_MAPPING.items() for k in kws},
+        **{e.text: EntityType.LAW_ABBR.name for e in abbr_entities},
     }
-    extractor = KeywordExtractor(keywords=keyword_to_label.keys(), ignore_overlaps=True)
+    abbr_to_entity = {entity.text: entity for entity in abbr_entities}
+
+    extractor = KeywordExtractor(keywords=keyword_to_type.keys(), ignore_overlaps=True)
     found_segments = extractor.extract(text)
 
-    entities_by_type: dict[EntityType, list[Entity]] = defaultdict(list)
-
     for segment in found_segments:
-        label = keyword_to_label.get(segment.text)
-        if label is None:
+        type_ = keyword_to_type.get(segment.text)
+
+        if type_ is None:
             raise ValueError(f"Unknown keyword: {segment.text}")
 
-        entity_type_name = label.upper()
-        if entity_type_name in EntityType.__members__:
-            entity_type = EntityType[entity_type_name]
-            entities_by_type[entity_type].append(Entity.of(segment, entity_type))
-        else:
-            logger.debug(
-                f"Ignored entity with unknown type '{entity_type_name}': {segment}"
-            )
+        abbr_def = abbr_to_entity.get(segment.text)
+        if abbr_def and segment.start < abbr_def.start:
+            logger.debug(f"Ignored 'LAW_ABBR' before its definition:: {segment}")
 
-    return entities_by_type
+        entity_type = EntityType.__members__.get(type_.upper())
+        if entity_type is None:
+            logger.debug(f"Ignored entity with unrecognized type '{type_}': {segment}")
+            continue
+
+        yield Entity.of(segment, entity_type)
+

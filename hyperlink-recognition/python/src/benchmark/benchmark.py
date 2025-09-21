@@ -33,6 +33,7 @@ DEFAULT_REPEAT: Final = 10
 DEFAULT_NUMBER: Final = 1
 SOURCE_FILE_DIR: Final = f"{io_util.WORKING_DIR}/../../../samples"
 
+
 @dataclass
 class BenchmarkResult:
     """Container for benchmark results with comprehensive metrics."""
@@ -116,10 +117,10 @@ def load_test_sources(source_dir: str = SOURCE_FILE_DIR) -> Iterable[tuple[str, 
 
 def benchmark(
     func: Callable[..., Any],
-    *args: Any,
     repeat: int = DEFAULT_REPEAT,
     number: int = DEFAULT_NUMBER,
     warmup: bool = True,
+    *args: Any,
     **kwargs: Any,
 ) -> BenchmarkResult:
     """
@@ -127,10 +128,10 @@ def benchmark(
 
     Args:
         func: Function to benchmark
-        *args: Positional arguments to pass to the function
         repeat: Number of times to repeat the benchmark
         number: Number of function calls per repeat
         warmup: Whether to perform a warmup run before benchmarking
+        *args: Positional arguments to pass to the function
         **kwargs: Keyword arguments to pass to the function
 
     Returns:
@@ -230,72 +231,25 @@ def format_benchmark_result(
 
 def run_benchmarks(
     func: Callable[..., Any],
-    source_dir: str = SOURCE_FILE_DIR,
     repeat: int = DEFAULT_REPEAT,
     number: int = DEFAULT_NUMBER,
     warmup: bool = True,
+    *args: Any,
+    **kwargs: Any,
 ) -> None:
     """
     Run benchmarks on all test sources for the specified function.
-
-    Args:
-        func: Function to benchmark. If None, uses the default function.
-        source_dir: Directory containing test source files
-        repeat: Number of times to repeat each benchmark
-        number: Number of function calls per repeat
-        warmup: Whether to perform warmup runs
     """
     logger.info(f"Starting benchmark suite for function: {func.__name__}")
 
     try:
-        for text, source_path in load_test_sources(source_dir):
-            logger.info(f"Processing source file: {source_path.name}")
-
-            try:
-                result = benchmark(
-                    func, text, repeat=repeat, number=number, warmup=warmup
-                )
-
-                print(
-                    format_benchmark_result(
-                        result, f"{source_path.name} - {func.__name__}"
-                    )
-                )
-
-            except Exception:
-                logger.exception(
-                    f"Failed to benchmark {func.__name__} on source {source_path.name}"
-                )
-                continue
-
+        result = benchmark(func, repeat, number, warmup, *args, **kwargs)
+        print(format_benchmark_result(result))
     except Exception:
         logger.exception("Benchmark suite failed")
         sys.exit(1)
 
     logger.info("Benchmark suite completed.")
-
-
-def benchmark_function(
-    func: Callable[..., Any],
-    text: str,
-    repeat: int = DEFAULT_REPEAT,
-    number: int = DEFAULT_NUMBER,
-    warmup: bool = True,
-) -> BenchmarkResult:
-    """
-    Convenience function to benchmark a single function with a single text input.
-
-    Args:
-        func: Function to benchmark
-        text: Text input to pass to the function
-        repeat: Number of times to repeat the benchmark
-        number: Number of function calls per repeat
-        warmup: Whether to perform warmup runs
-
-    Returns:
-        BenchmarkResult containing performance metrics
-    """
-    return benchmark(func, text, repeat=repeat, number=number, warmup=warmup)
 
 
 def main() -> None:
@@ -316,33 +270,27 @@ def main() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=epilog,
     )
-
     parser.add_argument(
         "--sources",
         default=SOURCE_FILE_DIR,
         help=f"Directory containing test source files (default: {SOURCE_FILE_DIR})",
     )
-
     parser.add_argument(
         "--repeat",
         type=int,
         default=DEFAULT_REPEAT,
         help=f"Number of times to repeat each benchmark (default: {DEFAULT_REPEAT})",
     )
-
     parser.add_argument(
         "--number",
         type=int,
         default=DEFAULT_NUMBER,
         help=f"Number of function calls per repeat (default: {DEFAULT_NUMBER})",
     )
-
     parser.add_argument(
         "--no-warmup", action="store_true", help="Skip warmup runs before benchmarking"
     )
-
     parser.add_argument("--verbose", action="store_true", help="Enable verbose logging")
-
     parser.add_argument(
         "--function",
         help="Function to benchmark (e.g., 'recognition.extractor.extract_entities'). "
@@ -376,16 +324,18 @@ def main() -> None:
 
     if func_to_benchmark is None:
         from recognition.extractor import extract_entities
+
         func_to_benchmark = extract_entities
 
-    # Run benchmarks
-    run_benchmarks(
-        func=func_to_benchmark,
-        source_dir=args.sources,
-        repeat=args.repeat,
-        number=args.number,
-        warmup=not args.no_warmup,
-    )
+    for text, _ in load_test_sources(args.sources):
+        # Run benchmarks
+        run_benchmarks(
+            func=func_to_benchmark,
+            repeat=args.repeat,
+            number=args.number,
+            warmup=not args.no_warmup,
+            text=text,
+        )
 
 
 if __name__ == "__main__":
