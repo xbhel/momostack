@@ -82,7 +82,7 @@ class ChineseLawTitleNormalizer(Normalizer):
         text = self._extract_nested_text(text)
 
         # remove prefixes
-        text = self._remove_promulgators(text)
+        text = self._remove_leading_promulgators(text)
         # remove suffixes
         return self._remove_trailing_brackets(text)
 
@@ -111,7 +111,7 @@ class ChineseLawTitleNormalizer(Normalizer):
 
         return text[:end_index]
 
-    def _remove_promulgators(self, text: str) -> str:
+    def _remove_leading_promulgators(self, text: str) -> str:
         """
         Remove promulgator keywords and their associated descriptions
         enclosed in brackets from the text

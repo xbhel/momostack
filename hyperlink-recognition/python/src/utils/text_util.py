@@ -1,11 +1,14 @@
 import html
 import re
+from collections.abc import Iterable
 from typing import Final
 
+from utils.coll_util import reverse_dict
 from utils.io_util import load_resource_json
 
 _WHITESPACE_REGEX: Final = re.compile(r"\s+", re.UNICODE)
-_ASCII_MAPPING_TABLE: Final = load_resource_json("AsciiMapping.json")
+_ASCII_MAPPING_TABLE: Final[dict[str, str]] = load_resource_json("AsciiMapping.json")
+_ASCII_TO_VARIANTS: Final[dict[str, set[str]]] = reverse_dict(_ASCII_MAPPING_TABLE)
 
 
 def to_ascii(text: str) -> str:
@@ -47,5 +50,14 @@ def unescape_html_entities(text: str, max_unescape_times: int = 3) -> str:
     return text
 
 
-def strip_quotes(text: str) -> str:
-    return text.strip("\"'‘’“”")  # noqa: RUF001
+def strip_equivalent_symbols(
+    text: str, symbol: str, variants: Iterable[str] | None = None
+) -> str:
+    equivalents = {symbol}
+    if variants:
+        equivalents.update(variants)
+
+    if symbols := _ASCII_TO_VARIANTS.get(symbol):
+        equivalents.update(symbols)
+
+    return text.strip("".join(equivalents))

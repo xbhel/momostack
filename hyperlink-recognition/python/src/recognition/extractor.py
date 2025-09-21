@@ -247,7 +247,7 @@ class KeywordExtractor(Extractor):
         return text
 
 
-class RegexPatternExtractor(Extractor):
+class PatternExtractor(Extractor):
     """
     Extract entities using regex patterns.
 
@@ -347,19 +347,19 @@ class ChainedExtractor(Extractor):
         return [segment for segments in segments_list for segment in segments]
 
 
-_DATE_EXTRACTOR: Final = RegexPatternExtractor(patterns['date'])
-_CASE_NO_EXTRACTOR: Final = RegexPatternExtractor(patterns['case_no'])
-_ISSUE_NO_EXTRACTOR = RegexPatternExtractor(patterns['issue_nos'], True, 1)
-_ARTICLE_NO_EXTRACTOR: Final = RegexPatternExtractor(patterns['article_no'])
+_DATE_EXTRACTOR: Final = PatternExtractor(patterns['date'])
+_CASE_NO_EXTRACTOR: Final = PatternExtractor(patterns['case_no'])
+_ISSUE_NO_EXTRACTOR = PatternExtractor(patterns['issue_nos'], True, 1)
+_ARTICLE_NO_EXTRACTOR: Final = PatternExtractor(patterns['article_no'])
 _LAW_TITLE_EXTRACTOR = PairedSymbolExtractor(("《", "》"), False, "outermost", True)
-_ABBR_DEFINITION_EXTRACTOR = RegexPatternExtractor(patterns['abbr_definition'], group=1)
-_PAIRED_BRACKETS_EXTRACTOR: Final = RegexPatternExtractor(patterns['paired_brackets'])
+_ABBR_DEFINITION_EXTRACTOR = PatternExtractor(patterns['abbr_definition'], group=1)
+_PAIRED_BRACKETS_EXTRACTOR: Final = PatternExtractor(patterns['paired_brackets'])
 _KEYWORD_MAPPING: dict[str, list[str]] = io_util.load_resource_json(
     "KeywordMapping.json"
 )
 
 
-def extract_entities(text: str) -> list[Entity]:
+def extract(text: str) -> list[Entity]:
     """
     Extracts all relevant entities from the input text, including those found via
     bracketed expressions, keyword-based extraction, and direct pattern matching.
