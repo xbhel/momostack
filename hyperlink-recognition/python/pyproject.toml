@@ -1,18 +1,18 @@
 [project]
 name = "hyperlink-recognition"
 version = "1.0.0"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 description = "The Hyperlink Recognition system is designed to automatically detect and validate references within documents."
 authors = [{ name = "xbhel", email = "xbhel@outlook.com" }]
-dependencies = [
-    "pyahocorasick==2.2.0",
-]
+dependencies = ["pyahocorasick==2.2.0", "urllib3==1.26.15"]
 
 [dependency-groups]
 dev = [
+    "mypy>=1.17.0",
     "coverage==7.6.12",
     "psutil==7.1.0",
-    "types-psutil"
+    "types-psutil==7.0.0.20250822",
+    "types-urllib3==1.26.15",
 ]
 
 [tool.pytest.ini_options]
@@ -124,11 +124,10 @@ warn_unreachable = false
 no_implicit_reexport = true
 files = ["src", "tests"]
 exclude = "(?x)(/hooks/ | tests/test-output-folder/)"
+plugins = []
 
 [[tool.mypy.overrides]]
-module = [
-    "tests.*",
-]
+module = ["tests.*"]
 disable_error_code = ["no-untyped-def"]
 
 

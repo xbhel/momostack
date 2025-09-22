@@ -102,4 +102,3 @@ def _resolve_overlaps_keep_earliest(
         if not direct_only:
             prev_end = max(prev_end, segment.end)
     return result
-

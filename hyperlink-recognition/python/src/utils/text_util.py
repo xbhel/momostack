@@ -21,6 +21,13 @@ def to_ascii(text: str) -> str:
 
 
 def remove_all_whitespaces(text: str) -> str:
+    """
+    Remove all Unicode whitespace characters from the input string.
+
+    This function replaces all sequences of whitespace (spaces, tabs, newlines,
+    and other Unicode whitespace) with nothing, effectively concatenating all
+    non-whitespace characters.
+    """
     return _WHITESPACE_REGEX.sub("", text)
 
 
