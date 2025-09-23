@@ -1,18 +1,32 @@
 [project]
 name = "hyperlink-recognition"
 version = "1.0.0"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 description = "The Hyperlink Recognition system is designed to automatically detect and validate references within documents."
+readme = "README.md"
+license = { text = "MIT" }
 authors = [{ name = "xbhel", email = "xbhel@outlook.com" }]
-dependencies = ["pyahocorasick==2.2.0", "urllib3==1.26.15"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Text Processing",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = ["pyahocorasick>=2.2.0,<3.0.0", "urllib3>=1.26.15,<3.0.0"]
 
 [dependency-groups]
 dev = [
     "mypy>=1.17.0",
-    "coverage==7.6.12",
-    "psutil==7.1.0",
-    "types-psutil==7.0.0.20250822",
-    "types-urllib3==1.26.15",
+    "coverage>=7.6.12",
+    "psutil>=7.1.0",
+    "pytest>=8.0.0",
+    "ruff>=0.8.0",
+    "types-psutil>=7.0.0",
+    "types-urllib3>=1.26.15",
 ]
 
 [tool.pytest.ini_options]
@@ -21,68 +35,57 @@ filterwarnings = ["error"]
 
 
 [tool.doc8]
-# TODO: Remove current max-line-length ignore in follow-up and adopt black limit.
-# max-line-length = 88
 ignore = ["D001"]
 
 
 [tool.ruff]
-src = ["src"]
+src = ["src", "tests"]
 fix = true
+line-length = 88
 show-fixes = true
-output-format = "full"
+
+[tool.ruff.format]
+quote-style = "double"
+# docstring-code-format = true
+# docstring-code-line-length = "dynamic"
 
 [tool.ruff.lint]
 select = [
-    "A", # flake8-builtins
-    #    "ANN", # flake8-annotations
+    "A",     # flake8-builtins
     "ARG",   # flake8-unused-arguments
     "ASYNC", # flake8-async
     "B",     # flake8-bugbear
-    #    "BLE",    # flake8-blind-except
-    "C4", # flake8-comprehensions
-    #    "C90",    # cognitive complexity
-    #    "COM",    # flake8-commas
-    #    "D", # pydocstyle
-    "DTZ", # flake8-datetimez
-    "E",   # pycodestyle errors
-    "EM",  # flake8-errmsg
-    #    "ERA",    # flake8-eradicate
-    "EXE", # flake8-executable
-    "F",   # pyflakes
-    "FA",  # flake8-future-annotations
-    #    "FBT",    # boolean trap
-    "FLY",  # flynt
-    "FURB", # refurb
-    #    "G",      # flake8-logging-format
-    "I",    # isort
-    "ICN",  # flake8-import-conventions
-    "INT",  # flake8-gettext
-    "ISC",  # implicit-str-concat
-    "LOG",  # flake8-logging
-    "N",    # pep8-naming
-    "PERF", # perflint
-    "PGH",  # pygrep-hooks
-    "PIE",  # flake8-pie
-    #    "PL",     # pylint
-    #    "PT",     # flake8-pytest-style
-    #    "PTH",    # flake8-use-pathlib
-    #    "PYI",    # flake8-pyi
-    #    "Q",      # flake8-quotes
-    "RET",  # flake8-return
-    "RSE",  # flake8-raise
-    "RUF",  # Ruff-specific lints
-    "S",    # flake8-bandit
-    "SIM",  # flake8-simplify
-    "SLF",  # flake8-self
-    "SLOT", # flake8-slots
-    #    "T20",    # flake8-print
-    "TCH", # flake8-type-checking
-    "TID", # ban relative imports
-    "TRY", # tryceratops
-    "UP",  # pyupgrade
-    "W",   # pycodestyle warnings
-    "YTT", # flake8-2020
+    "C4",    # flake8-comprehensions
+    "DTZ",   # flake8-datetimez
+    "E",     # pycodestyle errors
+    "EM",    # flake8-errmsg
+    "EXE",   # flake8-executable
+    "F",     # pyflakes
+    "FA",    # flake8-future-annotations
+    "FLY",   # flynt
+    "FURB",  # refurb
+    "I",     # isort
+    "ICN",   # flake8-import-conventions
+    "INT",   # flake8-gettext
+    "ISC",   # implicit-str-concat
+    "LOG",   # flake8-logging
+    "N",     # pep8-naming
+    "PERF",  # perflint
+    "PGH",   # pygrep-hooks
+    "PIE",   # flake8-pie
+    "RET",   # flake8-return
+    "RSE",   # flake8-raise
+    "RUF",   # Ruff-specific lints
+    "S",     # flake8-bandit
+    "SIM",   # flake8-simplify
+    "SLF",   # flake8-self
+    "SLOT",  # flake8-slots
+    "TCH",   # flake8-type-checking
+    "TID",   # ban relative imports
+    "TRY",   # tryceratops
+    "UP",    # pyupgrade
+    "W",     # pycodestyle warnings
+    "YTT",   # flake8-2020
 ]
 
 ignore = [
@@ -103,7 +106,7 @@ ignore = [
 exclude = ["tests/**"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = [
+"tests/**" = [
     "D104", # Missing docstring in public package
     "D200", # One-line docstring should fit on one line with quotes
     "S101", # use of assert
@@ -111,9 +114,6 @@ exclude = ["tests/**"]
     "S106", # Possible hardcoded password assigned to argument: "password"
     "S108", # Probable insecure usage of temporary file or directory: "/tmp"
 ]
-
-[tool.ruff.format]
-quote-style = "preserve"
 
 
 [tool.mypy]

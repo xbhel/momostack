@@ -1,7 +1,7 @@
 import unittest
 from typing import Any
 
-from recognition.structures import LookupDict
+from structures import LookupDict
 
 
 class TestLookupDict(unittest.TestCase):

@@ -1,6 +1,6 @@
 import re
 
-from recognition.structures import LookupDict
+from structures import ReadonlyDict
 from utils import io_util
 
 
@@ -11,7 +11,7 @@ def _compile(pattern: str) -> re.Pattern[str]:
         raise ValueError(f"Failed to compile regex pattern '{pattern}': {e}") from e
 
 
-def _init_patterns() -> LookupDict[str, re.Pattern[str] | list[re.Pattern[str]]]:
+def _init_patterns() -> ReadonlyDict[str, re.Pattern[str] | list[re.Pattern[str]]]:
     """
     Load and compile regex patterns from Pattern.json.
     Returns:
@@ -38,7 +38,7 @@ def _init_patterns() -> LookupDict[str, re.Pattern[str] | list[re.Pattern[str]]]
         else:
             raise TypeError(f"Pattern '{name}' must be a string or list of strings.")
 
-    return LookupDict(mapping)
+    return ReadonlyDict(mapping)
 
 
 # Use the readonly LookupDict

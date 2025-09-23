@@ -1,6 +1,7 @@
 import logging
 import os
 import re
+import xml.etree.ElementTree as ET
 from abc import ABC, abstractmethod
 from collections import defaultdict, deque
 from collections.abc import Callable, Generator, Iterable, Iterator
@@ -12,7 +13,7 @@ import ahocorasick  # type: ignore  # noqa: PGH003
 from recognition.datamodels import Entity, EntityType, Segment
 from recognition.patterns import patterns
 from recognition.resolver import resolve_overlaps
-from utils import io_util
+from utils import io_util, text_util
 
 __author__ = "xbhel"
 __email__ = "xbhel@outlook.com"
@@ -347,19 +348,23 @@ class ChainedExtractor(Extractor):
         return [segment for segments in segments_list for segment in segments]
 
 
-_DATE_EXTRACTOR: Final = PatternExtractor(patterns['date'])
-_CASE_NO_EXTRACTOR: Final = PatternExtractor(patterns['case_no'])
-_ISSUE_NO_EXTRACTOR = PatternExtractor(patterns['issue_nos'], True, 1)
-_ARTICLE_NO_EXTRACTOR: Final = PatternExtractor(patterns['article_no'])
+_DATE_EXTRACTOR: Final = PatternExtractor(patterns["date"])
+_CASE_NO_EXTRACTOR: Final = PatternExtractor(patterns["case_no"])
+_ISSUE_NO_EXTRACTOR = PatternExtractor(patterns["issue_nos"], True, 1)
+_ARTICLE_NO_EXTRACTOR: Final = PatternExtractor(patterns["article_no"])
 _LAW_TITLE_EXTRACTOR = PairedSymbolExtractor(("《", "》"), False, "outermost", True)
-_ABBR_DEFINITION_EXTRACTOR = PatternExtractor(patterns['abbr_definition'], group=1)
-_PAIRED_BRACKETS_EXTRACTOR: Final = PatternExtractor(patterns['paired_brackets'])
+_ABBR_DEFINITION_EXTRACTOR = PatternExtractor(patterns["abbr_definition"], group=1)
+_PAIRED_BRACKETS_EXTRACTOR: Final = PatternExtractor(patterns["paired_brackets"])
 _KEYWORD_MAPPING: dict[str, list[str]] = io_util.load_resource_json(
     "KeywordMapping.json"
 )
 
 
 def extract(text: str) -> list[Entity]:
+    return _post_process(text, _extract_entities_lazy(text))
+
+
+def _extract_entities_lazy(text: str) -> Iterator[Entity]:
     """
     Extracts all relevant entities from the input text, including those found via
     bracketed expressions, keyword-based extraction, and direct pattern matching.
@@ -377,11 +382,7 @@ def extract(text: str) -> list[Entity]:
     pattern_entities = _extract_pattern_entities(text)
 
     # Merge all entity mappings, giving precedence to earlier updates.
-    merged_entities = chain(bracket_entities, keyword_entities, pattern_entities)
-
-    # If two entities have the same (start, end), the first one will remain,
-    # so the earlier position has higher priority.
-    return resolve_overlaps(merged_entities, 'longest', direct_only=True)
+    return chain(bracket_entities, keyword_entities, pattern_entities)
 
 
 def _extract_pattern_entities(text: str) -> Generator[Entity, Any, None]:
@@ -460,3 +461,34 @@ def _extract_keyword_entities(
 
         yield Entity.of(segment, entity_type)
 
+
+def _post_process(text: str, entities: Iterable[Entity]) -> list[Entity]:
+    # If two entities have the same (start, end), the first one will remain,
+    # so the earlier position has higher priority.
+    entities = resolve_overlaps(entities, "longest", direct_only=True)
+
+    # Valid entity text is a valid XML fragment without unclosed tags
+    predicates: tuple[Callable[[str, Segment], bool]] = (_is_valid_xml_fragment,)
+
+    return [x for x in entities if all(p(text, x) for p in predicates)]
+
+
+def _is_valid_xml_fragment(document: str, segment: Segment) -> bool:
+    """
+    Check whether a text segment is a valid XML fragment.
+    """
+    text = text_util.unescape_html_entities(segment.text)
+
+    # inside attribute value <p attr="xxx text">...</p>
+    nearest_start = document.rfind("<", 0, segment.start)
+    nearest_end = document.rfind(">", 0, segment.start)
+    if nearest_start != -1 and nearest_start < nearest_end:
+        return False
+
+    # strict validation
+    try:
+        ET.fromstring(f"<root>{text}</root>")  # noqa: S314
+    except ET.ParseError:
+        return False
+
+    return True

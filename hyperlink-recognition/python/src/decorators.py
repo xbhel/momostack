@@ -3,7 +3,7 @@ import threading
 from collections.abc import Callable
 from functools import wraps
 from time import monotonic
-from typing import Any, ParamSpec, TypeVar, cast
+from typing import ParamSpec, TypeVar
 
 from utils.coll_util import hash_value
 
@@ -32,7 +32,7 @@ def ttl_cache(ttl: float) -> Callable[[Callable[_P, _R]], Callable[_P, _R]]:
     def decorator(func: Callable[_P, _R]) -> Callable[_P, _R]:
         # Per-function cache and lock to ensure thread-safety
         lock = threading.RLock()
-        cache: dict[tuple[Any, ...], tuple[float, _R]] = {}
+        cache: dict[tuple[str, int, int], tuple[float, _R]] = {}
 
         @wraps(func)
         def wrapped(*args: _P.args, **kwargs: _P.kwargs) -> _R:
@@ -62,6 +62,6 @@ def ttl_cache(ttl: float) -> Callable[[Callable[_P, _R]], Callable[_P, _R]]:
         # Attach cache control to the wrapped function
         wrapped.cache_clear = cache_clear  # type: ignore[attr-defined]
 
-        return cast("Callable[_P, _R]", wrapped)
+        return wrapped
 
     return decorator

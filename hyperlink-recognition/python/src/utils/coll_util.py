@@ -1,17 +1,8 @@
 import json
 from collections import defaultdict
+from collections.abc import Callable, Iterable
 from hashlib import sha256
-from typing import Any, TypeVar
-
-KT = TypeVar("KT")
-VT = TypeVar("VT")
-
-
-def reverse_dict(mapping: dict[KT, VT]) -> dict[VT, set[KT]]:
-    reversed_mapping: dict[VT, set[KT]] = defaultdict(set)
-    for k, v in mapping.items():
-        reversed_mapping[v].add(k)
-    return reversed_mapping
+from typing import Any
 
 
 def hash_value(value: Any) -> int:
@@ -41,3 +32,17 @@ def hash_value(value: Any) -> int:
     data = json.dumps(normalized, sort_keys=True, default=str).encode()
     digest = sha256(data).digest()
     return int.from_bytes(digest, byteorder="big", signed=False)
+
+
+def reverse_dict[KT, VT](mapping: dict[KT, VT]) -> dict[VT, set[KT]]:
+    reversed_mapping: dict[VT, set[KT]] = defaultdict(set)
+    for k, v in mapping.items():
+        reversed_mapping[v].add(k)
+    return reversed_mapping
+
+
+def group_by[T, K](items: Iterable[T], key: Callable[[T], K]) -> dict[K, list[T]]:
+    mapping = defaultdict(list)
+    for item in items:
+        mapping[key(item)].append(item)
+    return mapping
