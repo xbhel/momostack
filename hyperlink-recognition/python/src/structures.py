@@ -3,14 +3,36 @@ from __future__ import annotations
 from bisect import bisect_left, bisect_right
 from collections import OrderedDict
 from collections.abc import ItemsView, Iterator, KeysView, Mapping, ValuesView
-from typing import Any, Protocol, overload
+from typing import Any, Protocol, TypeVar, overload
+
+KT = TypeVar("KT")
+VT = TypeVar("VT")
+_T_contra = TypeVar("_T_contra", contravariant=True)
 
 
-class Comparable(Protocol):
-    def __lt__(self, other: Any) -> bool: ...
+class SupportsDunderLT(Protocol[_T_contra]):
+    def __lt__(self, other: _T_contra, /) -> bool: ...
 
 
-class ReadonlyDict[KT, VT](Mapping[KT, VT]):
+class SupportsDunderGT(Protocol[_T_contra]):
+    def __gt__(self, other: _T_contra, /) -> bool: ...
+
+
+class SupportsDunderLE(Protocol[_T_contra]):
+    def __le__(self, other: _T_contra, /) -> bool: ...
+
+
+class SupportsDunderGE(Protocol[_T_contra]):
+    def __ge__(self, other: _T_contra, /) -> bool: ...
+
+
+type SupportsRichComparison = SupportsDunderLT[Any] | SupportsDunderGT[Any]
+SupportsRichComparisonT = TypeVar(
+    "SupportsRichComparisonT", bound=SupportsRichComparison
+)
+
+
+class ReadonlyDict(Mapping[KT, VT]):
     """
     An immutable dictionary-like mapping that prevents modification after creation.
 
@@ -91,7 +113,7 @@ class ReadonlyDict[KT, VT](Mapping[KT, VT]):
         return NotImplemented
 
 
-class LookupDict[KT: Comparable, VT](ReadonlyDict[KT, VT]):
+class LookupDict(ReadonlyDict[SupportsRichComparisonT, VT]):
     """
     An immutable mapping that supports efficient floor/ceiling/lower/higher key lookups.
 
@@ -110,12 +132,15 @@ class LookupDict[KT: Comparable, VT](ReadonlyDict[KT, VT]):
 
     __slots__ = ("_data", "_keys")
 
-    def __init__(self, data: dict[KT, VT] | Mapping[KT, VT]) -> None:
+    def __init__(
+        self,
+        data: dict[SupportsRichComparisonT, VT] | Mapping[SupportsRichComparisonT, VT],
+    ) -> None:
         ordered = OrderedDict(sorted(data.items(), key=lambda x: x[0]))
         super().__init__(ordered)
         self._keys = list(ordered.keys())
 
-    def floor(self, key: KT) -> VT | None:
+    def floor(self, key: SupportsRichComparisonT) -> VT | None:
         """
         Returns the value associated with the greatest key <= the given key,
         or None if there is no such key.
@@ -125,7 +150,7 @@ class LookupDict[KT: Comparable, VT](ReadonlyDict[KT, VT]):
             return None
         return self._data[self._keys[pos - 1]]
 
-    def ceiling(self, key: KT) -> VT | None:
+    def ceiling(self, key: SupportsRichComparisonT) -> VT | None:
         """
         Returns the value associated with the smallest key >= the given key,
         or None if there is no such key.
@@ -135,7 +160,7 @@ class LookupDict[KT: Comparable, VT](ReadonlyDict[KT, VT]):
             return None
         return self._data[self._keys[pos]]
 
-    def lower(self, key: KT) -> VT | None:
+    def lower(self, key: SupportsRichComparisonT) -> VT | None:
         """
         Returns the value associated with the greatest key < the given key,
         or None if there is no such key.
@@ -145,7 +170,7 @@ class LookupDict[KT: Comparable, VT](ReadonlyDict[KT, VT]):
             return None
         return self._data[self._keys[pos - 1]]
 
-    def higher(self, key: KT) -> VT | None:
+    def higher(self, key: SupportsRichComparisonT) -> VT | None:
         """
         Returns the value associated with the smallest key > the given key,
         or None if there is no such key.
@@ -156,8 +181,8 @@ class LookupDict[KT: Comparable, VT](ReadonlyDict[KT, VT]):
         return self._data[self._keys[pos]]
 
     def range(
-        self, start: KT | None = None, end: KT | None = None
-    ) -> Iterator[tuple[KT, VT]]:
+        self, start: SupportsRichComparisonT | None = None, end: KT | None = None
+    ) -> Iterator[tuple[SupportsRichComparisonT, VT]]:
         """
         Return an iterator over (key, value) pairs in the range [start, end).
 

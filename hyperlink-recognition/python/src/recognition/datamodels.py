@@ -44,14 +44,14 @@ class Segment:
 class Entity(Segment):
     # category: str
     entity_type: EntityType
-    attrs: list[str] | None = None
+    attrs: list["Entity"] | None = None
 
     @classmethod
     def of(
         cls,
         segment: Segment,
         entity_type: EntityType,
-        attrs: list[str] | None = None,
+        attrs: list["Entity"] | None = None,
     ) -> Self:
         return cls(
             text=segment.text,
@@ -60,3 +60,8 @@ class Entity(Segment):
             entity_type=entity_type,
             attrs=attrs,
         )
+
+    def add_attr(self, attr: "Entity") -> None:
+        if self.attrs is None:
+            self.attrs = []
+        self.attrs.append(attr)

@@ -361,10 +361,6 @@ _KEYWORD_MAPPING: dict[str, list[str]] = io_util.load_resource_json(
 
 
 def extract(text: str) -> list[Entity]:
-    return _post_process(text, _extract_entities_lazy(text))
-
-
-def _extract_entities_lazy(text: str) -> Iterator[Entity]:
     """
     Extracts all relevant entities from the input text, including those found via
     bracketed expressions, keyword-based extraction, and direct pattern matching.
@@ -382,7 +378,14 @@ def _extract_entities_lazy(text: str) -> Iterator[Entity]:
     pattern_entities = _extract_pattern_entities(text)
 
     # Merge all entity mappings, giving precedence to earlier updates.
-    return chain(bracket_entities, keyword_entities, pattern_entities)
+    merged_entities = chain(bracket_entities, keyword_entities, pattern_entities)
+
+    # Post-process to filter out invalid entities
+    validated_entities = _validate_entities(text, merged_entities)
+
+    # If two entities have the same (start, end), the first one will remain,
+    # so the earlier position has higher priority.
+    return resolve_overlaps(validated_entities, strategy="longest", direct_only=True)
 
 
 def _extract_pattern_entities(text: str) -> Generator[Entity, Any, None]:
@@ -462,15 +465,15 @@ def _extract_keyword_entities(
         yield Entity.of(segment, entity_type)
 
 
-def _post_process(text: str, entities: Iterable[Entity]) -> list[Entity]:
-    # If two entities have the same (start, end), the first one will remain,
-    # so the earlier position has higher priority.
-    entities = resolve_overlaps(entities, "longest", direct_only=True)
-
+def _validate_entities(
+    text: str, entities: Iterable[Entity]
+) -> Generator[Entity, Any, None]:
     # Valid entity text is a valid XML fragment without unclosed tags
-    predicates: tuple[Callable[[str, Segment], bool]] = (_is_valid_xml_fragment,)
-
-    return [x for x in entities if all(p(text, x) for p in predicates)]
+    validations: tuple[Callable[[str, Entity], bool], ...] = (
+        _is_unmarked_hyperlink,
+        _is_valid_xml_fragment,
+    )
+    yield from (x for x in entities if all(v(text, x) for v in validations))
 
 
 def _is_valid_xml_fragment(document: str, segment: Segment) -> bool:
@@ -479,10 +482,10 @@ def _is_valid_xml_fragment(document: str, segment: Segment) -> bool:
     """
     text = text_util.unescape_html_entities(segment.text)
 
-    # inside attribute value <p attr="xxx text">...</p>
-    nearest_start = document.rfind("<", 0, segment.start)
-    nearest_end = document.rfind(">", 0, segment.start)
-    if nearest_start != -1 and nearest_start < nearest_end:
+    # inside attribute value(e.g., <tag attr="...">)
+    last_open = document.rfind("<", 0, segment.start)
+    last_close = document.rfind(">", 0, segment.start)
+    if last_open != -1 and last_close < last_open:
         return False
 
     # strict validation
@@ -492,3 +495,14 @@ def _is_valid_xml_fragment(document: str, segment: Segment) -> bool:
         return False
 
     return True
+
+
+def _is_unmarked_hyperlink(document: str, segment: Segment) -> bool:
+    """
+    Check whether a text segment is already marked with an <a> tag.
+    """
+    last_open = document.rfind("<a", 0, segment.start)
+    if last_open == -1:
+        return True
+    last_close = document.rfind("</a>", 0, segment.start)
+    return last_close != -1 and last_close > last_open

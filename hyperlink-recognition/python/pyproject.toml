@@ -16,7 +16,11 @@ classifiers = [
     "Topic :: Text Processing",
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
-dependencies = ["pyahocorasick>=2.2.0,<3.0.0", "urllib3>=1.26.15,<3.0.0"]
+dependencies = [
+    "pyahocorasick>=2.2.0,<3.0.0",
+    "urllib3>=1.26.15,<3.0.0",
+    "lxml==5.1.0",
+]
 
 [dependency-groups]
 dev = [
