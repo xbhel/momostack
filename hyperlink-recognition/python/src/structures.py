@@ -3,33 +3,9 @@ from __future__ import annotations
 from bisect import bisect_left, bisect_right
 from collections import OrderedDict
 from collections.abc import ItemsView, Iterator, KeysView, Mapping, ValuesView
-from typing import Any, Protocol, TypeVar, overload
+from typing import overload
 
-KT = TypeVar("KT")
-VT = TypeVar("VT")
-_T_contra = TypeVar("_T_contra", contravariant=True)
-
-
-class SupportsDunderLT(Protocol[_T_contra]):
-    def __lt__(self, other: _T_contra, /) -> bool: ...
-
-
-class SupportsDunderGT(Protocol[_T_contra]):
-    def __gt__(self, other: _T_contra, /) -> bool: ...
-
-
-class SupportsDunderLE(Protocol[_T_contra]):
-    def __le__(self, other: _T_contra, /) -> bool: ...
-
-
-class SupportsDunderGE(Protocol[_T_contra]):
-    def __ge__(self, other: _T_contra, /) -> bool: ...
-
-
-type SupportsRichComparison = SupportsDunderLT[Any] | SupportsDunderGT[Any]
-SupportsRichComparisonT = TypeVar(
-    "SupportsRichComparisonT", bound=SupportsRichComparison
-)
+from typings import KT, VT, SupportsRichComparisonT, T
 
 
 class ReadonlyDict(Mapping[KT, VT]):
@@ -80,9 +56,9 @@ class ReadonlyDict(Mapping[KT, VT]):
     def get(self, key: KT) -> VT | None: ...
 
     @overload
-    def get(self, key: KT, default: Any) -> VT: ...
+    def get(self, key: KT, default: T) -> VT | T: ...
 
-    def get(self, key: KT, default: Any = None) -> VT | Any:
+    def get(self, key: KT, default: VT | T | None = None) -> VT | T | None:
         """Return the value for key if key is in the dictionary, else default."""
         return self._data.get(key, default)
 

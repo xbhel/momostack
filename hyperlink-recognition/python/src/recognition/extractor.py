@@ -10,7 +10,7 @@ from typing import Any, Final, Literal, override
 
 import ahocorasick  # type: ignore  # noqa: PGH003
 
-from recognition.datamodels import Entity, EntityType, Segment
+from datamodels import Entity, EntityType, Segment
 from recognition.patterns import patterns
 from recognition.resolver import resolve_overlaps
 from utils import io_util, text_util

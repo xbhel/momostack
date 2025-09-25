@@ -9,10 +9,10 @@ if TYPE_CHECKING:
     import re
 
 _COMMA: Final = ","
-_LEFT_BRACKET: Final = '('
-_RIGHT_BRACKET: Final = ')'
+_LEFT_BRACKET: Final = "("
+_RIGHT_BRACKET: Final = ")"
 _FORWARD_CHINESE: Final = "转发"
-_NESTED_TITLE_PATTERN: Final = cast("re.Pattern[str]", patterns['nested_title'])
+_NESTED_TITLE_PATTERN: Final = cast("re.Pattern[str]", patterns["nested_title"])
 
 
 class Normalizer:
@@ -64,7 +64,7 @@ class ChineseLawTitleNormalizer(Normalizer):
     _bracket_extractor = PairedSymbolExtractor(
         (_LEFT_BRACKET, _RIGHT_BRACKET),
         include_symbols=True,
-        strategy='outermost',
+        strategy="outermost",
         allow_fallback_on_unclosed=True,
     )
 

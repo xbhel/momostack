@@ -1,27 +1,29 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
-from enum import Enum, unique
+from enum import StrEnum, auto, unique
 from typing import Self
 
 
 @unique
-class EntityType(int, Enum):
+class EntityType(StrEnum):
     depends_on: tuple[Self, ...]
 
-    DATE = 1, ()
-    ISSUE_NO = 2, ()
-    PROMULGATOR = 3, ()
-    CASE_NO = 4, ()
-    LAW_SELF = 5, ()
-    LAW_TITLE = 6, (DATE, ISSUE_NO, PROMULGATOR)
-    LAW_ARTICLE_NO = 7, (LAW_TITLE,)
-    LAW_ABBR = 8, (LAW_TITLE,)
+    DATE = auto(), ()
+    ISSUE_NO = auto(), ()
+    PROMULGATOR = auto(), ()
+    CASE_NO = auto(), ()
+    LAW_TITLE = auto(), (DATE, ISSUE_NO, PROMULGATOR)
+    LAW_SELF = auto(), (LAW_TITLE,)
+    LAW_ARTICLE_NO = auto(), (LAW_TITLE,)
+    LAW_ABBR = auto(), (LAW_TITLE,)
 
     def __new__(
         cls,
-        value: int,
+        value: str,
         depends_on: tuple[Self, ...],
-    ) -> "EntityType":
-        obj = int.__new__(cls, value)
+    ) -> EntityType:
+        obj = str.__new__(cls, value)
         obj._value_ = value
         obj.depends_on = depends_on or ()
         return obj
@@ -44,14 +46,16 @@ class Segment:
 class Entity(Segment):
     # category: str
     entity_type: EntityType
-    attrs: list["Entity"] | None = None
+    attrs: list[Entity] | None = None
+    refers_to: Entity | None = None
 
     @classmethod
     def of(
         cls,
         segment: Segment,
         entity_type: EntityType,
-        attrs: list["Entity"] | None = None,
+        attrs: list[Entity] | None = None,
+        refers_to: Entity | None = None,
     ) -> Self:
         return cls(
             text=segment.text,
@@ -59,9 +63,10 @@ class Entity(Segment):
             end=segment.end,
             entity_type=entity_type,
             attrs=attrs,
+            refers_to=refers_to,
         )
 
-    def add_attr(self, attr: "Entity") -> None:
+    def add_attr(self, attr: Entity) -> None:
         if self.attrs is None:
             self.attrs = []
         self.attrs.append(attr)
