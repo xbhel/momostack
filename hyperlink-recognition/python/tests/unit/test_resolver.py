@@ -1,5 +1,4 @@
 import unittest
-from typing import Literal
 
 from recognition.datamodels import Segment
 from recognition.resolver import resolve_overlaps

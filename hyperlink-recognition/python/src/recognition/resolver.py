@@ -1,7 +1,7 @@
 from collections.abc import Iterable
 from typing import Literal
 
-from datamodels import Segment
+from recognition.datamodels import Segment
 
 
 def resolve_overlaps[T: Segment](

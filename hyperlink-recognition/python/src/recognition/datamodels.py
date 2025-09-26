@@ -1,32 +1,36 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum, auto, unique
 from typing import Self
 
 
 @unique
 class EntityType(StrEnum):
-    depends_on: tuple[Self, ...]
+    _depends_on_name_: tuple[str, ...]
 
     DATE = auto(), ()
     ISSUE_NO = auto(), ()
     PROMULGATOR = auto(), ()
     CASE_NO = auto(), ()
-    LAW_TITLE = auto(), (DATE, ISSUE_NO, PROMULGATOR)
-    LAW_SELF = auto(), (LAW_TITLE,)
-    LAW_ARTICLE_NO = auto(), (LAW_TITLE,)
-    LAW_ABBR = auto(), (LAW_TITLE,)
+    LAW_TITLE = auto(), ("DATE", "ISSUE_NO", "PROMULGATOR")
+    LAW_SELF = auto(), ("LAW_TITLE",)
+    LAW_ARTICLE_NO = auto(), ("LAW_TITLE",)
+    LAW_ABBR = auto(), ("LAW_TITLE",)
 
     def __new__(
         cls,
         value: str,
-        depends_on: tuple[Self, ...],
+        depends_on_name: tuple[str, ...],
     ) -> EntityType:
         obj = str.__new__(cls, value)
         obj._value_ = value
-        obj.depends_on = depends_on or ()
+        obj._depends_on_name_ = depends_on_name
         return obj
+
+    @property
+    def depends_on(self) -> tuple[EntityType, ...]:
+        return tuple(EntityType[x] for x in self._depends_on_name_)
 
 
 @dataclass
@@ -44,9 +48,8 @@ class Segment:
 
 @dataclass
 class Entity(Segment):
-    # category: str
     entity_type: EntityType
-    attrs: list[Entity] | None = None
+    attrs: list[Entity] = field(default_factory=list)
     refers_to: Entity | None = None
 
     @classmethod
@@ -57,6 +60,8 @@ class Entity(Segment):
         attrs: list[Entity] | None = None,
         refers_to: Entity | None = None,
     ) -> Self:
+        if attrs is None:
+            attrs = []
         return cls(
             text=segment.text,
             start=segment.start,
@@ -65,8 +70,3 @@ class Entity(Segment):
             attrs=attrs,
             refers_to=refers_to,
         )
-
-    def add_attr(self, attr: Entity) -> None:
-        if self.attrs is None:
-            self.attrs = []
-        self.attrs.append(attr)

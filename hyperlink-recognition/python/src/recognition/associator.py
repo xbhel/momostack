@@ -2,8 +2,7 @@ from collections.abc import Iterable, Iterator
 from itertools import chain
 from typing import Final
 
-from datamodels import Entity, EntityType
-
+from recognition.datamodels import Entity, EntityType
 from structures import LookupDict
 from utils import coll_util
 
@@ -35,10 +34,9 @@ def associate_law_title(
     """
     Associate attributes (dates, issue numbers, promulgators) with law titles.
     """
+    forward_lookup_types = (EntityType.ISSUE_NO, EntityType.DATE)
     end_index_lookup = LookupDict({x.end: x for x in law_titles})
     start_index_lookup = LookupDict({x.start: x for x in law_titles})
-
-    forward_lookup_types = (EntityType.ISSUE_NO, EntityType.DATE)
 
     for attr in attrs:
         # forward lookup
@@ -49,14 +47,14 @@ def associate_law_title(
                 and _without_sentence_ending(text, entity.end, attr.start)
                 and _startswith_single_left_bracket(text, entity.end, attr.start)
             ):
-                entity.add_attr(attr)
+                entity.attrs.append(attr)
                 # forward attr only be occupy by a entity
                 continue
 
         # backward lookup
         entity = start_index_lookup.ceiling(attr.end)
         if entity and _without_sentence_ending(text, attr.end, entity.start):
-            entity.add_attr(attr)
+            entity.attrs.append(attr)
 
 
 def _without_sentence_ending(text: str, start: int, end: int) -> bool:
