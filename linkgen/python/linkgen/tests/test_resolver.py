@@ -2,17 +2,17 @@
 
 import unittest
 
-from recognition.postprocessor import (
+from linkgen.resolver import (
     _associate_entities,
     _associate_attributes,
     _associate_ref_definitions,
     _associate_ref_defs_for_dynamic_abbr,
     _is_not_sentence_ending,
     _startswith_single_left_bracket,
-    _move_space_after,
-    _move_element_tag_after,
+    _skip_leading_whitespace,
+    _skip_whitespace_and_tags,
 )
-from recognition.datamodels import Entity, EntityType
+from linkgen.models import Entity, EntityType
 
 
 class TestAssociate(unittest.TestCase):
@@ -214,40 +214,40 @@ class TestHelperFunctions(unittest.TestCase):
         result = _startswith_single_left_bracket(text, 0, len(text))
         self.assertTrue(result)
 
-    def test_move_space_after_no_spaces(self):
-        """Test _move_space_after with no leading spaces."""
+    def test_skip_leading_whitespace_no_spaces(self):
+        """Test _skip_leading_whitespace with no leading spaces."""
         text = "content"
-        result = _move_space_after(text, 0, len(text))
+        result = _skip_leading_whitespace(text, 0, len(text))
         self.assertEqual(result, 0)
 
-    def test_move_space_after_with_spaces(self):
-        """Test _move_space_after with leading spaces."""
+    def test_skip_leading_whitespace_with_spaces(self):
+        """Test _skip_leading_whitespace with leading spaces."""
         text = "   content"
-        result = _move_space_after(text, 0, len(text))
+        result = _skip_leading_whitespace(text, 0, len(text))
         self.assertEqual(result, 3)
 
-    def test_move_space_after_all_spaces(self):
-        """Test _move_space_after with all spaces."""
+    def test_skip_leading_whitespace_all_spaces(self):
+        """Test _skip_leading_whitespace with all spaces."""
         text = "   "
-        result = _move_space_after(text, 0, len(text))
+        result = _skip_leading_whitespace(text, 0, len(text))
         self.assertEqual(result, 3)
 
-    def test_move_element_tag_after_no_tag(self):
-        """Test _move_element_tag_after with no tag."""
+    def test_skip_whitespace_and_tags_no_tag(self):
+        """Test _skip_whitespace_and_tags with no tag."""
         text = "content"
-        result = _move_element_tag_after(text, 0, len(text))
+        result = _skip_whitespace_and_tags(text, 0, len(text))
         self.assertEqual(result, 0)
 
-    def test_move_element_tag_after_with_tag(self):
-        """Test _move_element_tag_after with HTML tag."""
+    def test_skip_whitespace_and_tags_with_tag(self):
+        """Test _skip_whitespace_and_tags with HTML tag."""
         text = "<div>content</div>"
-        result = _move_element_tag_after(text, 0, len(text))
+        result = _skip_whitespace_and_tags(text, 0, len(text))
         self.assertEqual(result, 5)  # After <div>
 
-    def test_move_element_tag_after_incomplete_tag(self):
-        """Test _move_element_tag_after with incomplete tag."""
+    def test_skip_whitespace_and_tags_incomplete_tag(self):
+        """Test _skip_whitespace_and_tags with incomplete tag."""
         text = "<div content"
-        result = _move_element_tag_after(text, 0, len(text))
+        result = _skip_whitespace_and_tags(text, 0, len(text))
         self.assertEqual(result, 0)  # No closing >
 
 

@@ -3,15 +3,12 @@ import os
 import re
 from abc import ABC, abstractmethod
 from collections import defaultdict, deque
-from collections.abc import Callable, Generator, Iterable, Iterator
-from itertools import chain
-from typing import Any, Final, Literal, override
+from collections.abc import Callable, Iterable, Iterator
+from typing import Literal, override
 
 import ahocorasick  # type: ignore  # noqa: PGH003
 
-from recognition.datamodels import Entity, EntityType, Segment
-from recognition.patterns import patterns
-from utils import io_util
+from linkgen.models import Segment
 
 __author__ = "xbhel"
 __email__ = "xbhel@outlook.com"
@@ -346,116 +343,99 @@ class ChainedExtractor(Extractor):
         return [segment for segments in segments_list for segment in segments]
 
 
-# Global extractors
-_DATE_EXTRACTOR: Final = PatternExtractor(patterns["date"])
-_CASE_NO_EXTRACTOR: Final = PatternExtractor(patterns["case_no"])
-_ISSUE_NO_EXTRACTOR = PatternExtractor(patterns["issue_nos"], True, 1)
-_ARTICLE_NO_EXTRACTOR: Final = PatternExtractor(patterns["article_no"])
-_LAW_TITLE_EXTRACTOR = PairedSymbolExtractor(("《", "》"), False, "outermost", True)
-_ABBR_DEFINITION_EXTRACTOR = PatternExtractor(patterns["abbr_definition"], group=1)
-_PAIRED_BRACKETS_EXTRACTOR: Final = PatternExtractor(patterns["paired_brackets"])
-_KEYWORD_MAPPING: dict[str, list[str]] = io_util.load_resource_json(
-    "KeywordMapping.json"
-)
-
-
-def extract_entities(text: str) -> Iterator[Entity]:
+def resolve_overlaps[T: Segment](
+    iterable: Iterable[T],
+    strategy: Literal["longest", "earliest", "earliest_longest"],
+    direct_only: bool = False,
+) -> list[T]:
     """
-    Extracts all relevant entities from the input text, including those found via
-    bracketed expressions, keyword-based extraction, and direct pattern matching.
+    Resolve overlapping segments according to the specified strategy.
 
-    Returns a mapping from EntityType to a list of Entity objects.
+    This function processes a sequence of Segment objects and removes overlaps
+    according to the chosen strategy. Optionally, you can restrict overlap
+    handling to *direct* overlaps only.
+
+    Args:
+        iterable: An iterable of Segment objects.
+        strategy: The overlap resolution strategy. One of:
+            - "longest": For each group of overlapping segments, keep the longest.
+            - "earliest": Keep the earliest non-overlapping segments.
+            - "earliest_longest": Prefer earliest, break ties by longest.
+        direct_only: If True, only directly overlapping segments are considered
+                        conflicts; indirectly overlapping segments (via a chain of
+                        overlaps) are treated as separate. Default is False.
+
+    Returns:
+        A list of resolved, non-overlapping Segment objects.
+
+    Examples::
+
+        # Suppose we have three segments: (0, 5), (4, 7), (6, 10)
+        segments = [Segment(0, 5), Segment(4, 7), Segment(6, 10)]
+
+        # Longest strategy, chained overlaps (direct_only=False)
+        resolve_overlaps(segments, "longest", direct_only=False)
+
+        # Output: [(0, 5)]  -> the overlapping chain (0-5,4-7,6-10) is merged,
+        #           keeping the longest segment
+
+        # Longest strategy, direct overlaps only (direct_only=True)
+        resolve_overlaps(segments, "longest", direct_only=True)
+        # Output: [(0, 5), (6, 10)] -> only direct overlaps are considered,
+        #           so (0,5) and (4,7) are compared separately from (6,10)
     """
-    # Extract entities within paired brackets (e.g., Issue No, Law Abbreviation)
-    bracket_entities = list(_extract_bracketed_entities(text))
-    dynamic_abbr_defs = [
-        x for x in bracket_entities if x.entity_type == EntityType.LAW_DYNAMIC_ABBR
-    ]
+    match strategy:
+        case "longest":
+            segments = sorted(iterable, key=lambda x: x.start)
+            func = _resolve_overlaps_keep_longest
+        case "earliest":
+            segments = sorted(iterable, key=lambda x: x.start)
+            func = _resolve_overlaps_keep_earliest
+        case "earliest_longest":
+            segments = sorted(iterable, key=lambda x: (x.start, -x.end))
+            func = _resolve_overlaps_keep_earliest
 
-    # Extract entities by keywords, using abbreviations found in brackets as keywords
-    keyword_entities = _extract_keyword_entities(text, dynamic_abbr_defs)
-
-    # Extract entities using direct pattern-based extractors
-    pattern_entities = _extract_pattern_entities(text)
-
-    # Merge all entity mappings, giving precedence to earlier updates.
-    return chain(bracket_entities, keyword_entities, pattern_entities)
-
-
-def _extract_pattern_entities(text: str) -> Generator[Entity, Any, None]:
-    """
-    Extracts entities from the text using predefined pattern-based extractors.
-    """
-    extractor_by_type: dict[EntityType, Extractor] = {
-        EntityType.DATE: _DATE_EXTRACTOR,
-        EntityType.CASE_NO: _CASE_NO_EXTRACTOR,
-        EntityType.LAW_TITLE: _LAW_TITLE_EXTRACTOR,
-        EntityType.LAW_ARTICLE_NO: _ARTICLE_NO_EXTRACTOR,
-    }
-
-    for entity_type, extractor in extractor_by_type.items():
-        segments = extractor.extract(text)
-        yield from (Entity.of(segment, entity_type) for segment in segments)
+    if not segments:
+        return []
+    return func(segments, direct_only)
 
 
-def _extract_bracketed_entities(text: str) -> Generator[Entity, Any, None]:
-    """
-    Extracts entities that are defined within paired brackets,
-    such as Issue No and Law Abbreviation.
-    """
-    extractor_by_type = {
-        EntityType.ISSUE_NO: _ISSUE_NO_EXTRACTOR,
-        EntityType.LAW_DYNAMIC_ABBR: _ABBR_DEFINITION_EXTRACTOR,
-    }
+def _resolve_overlaps_keep_longest[T: Segment](
+    segments: list[T], direct_only: bool = False
+) -> list[T]:
+    result = []
+    longest = segments[0]
+    group_end = longest.end
 
-    found_segments = _PAIRED_BRACKETS_EXTRACTOR.extract(text)
+    for index in range(1, len(segments)):
+        seg = segments[index]
+        # Check if segments overlap: seg.start < group_end
+        if seg.start < group_end:
+            # Segments overlap, keep the longer one
+            if (seg.end - seg.start) > (longest.end - longest.start):
+                longest = seg
+            group_end = longest.end if direct_only else max(group_end, seg.end)
+        else:
+            # No overlap, add the current longest to result and start new group
+            result.append(longest)
+            longest = seg
+            group_end = longest.end
 
-    for segment in found_segments:
-        offset = segment.start
-        inner_text = segment.text
-
-        for entity_type, extractor in extractor_by_type.items():
-            for entity in extractor.extract(inner_text):
-                yield Entity(
-                    text=entity.text,
-                    start=entity.start + offset,
-                    end=entity.end + offset,
-                    entity_type=entity_type,
-                )
+    # The last group
+    result.append(longest)
+    return result
 
 
-def _extract_keyword_entities(
-    text: str, dynamic_abbr_defs: list[Entity]
-) -> Generator[Entity, Any, None]:
-    """
-    Extracts entities from the text based on provided keyword mappings.
-    The mapping should be from label (str) to a list of keywords (str).
-    """
-    # Build a reverse mapping from keyword to label
-    keyword_to_type = {
-        **{k: label for label, kws in _KEYWORD_MAPPING.items() for k in kws},
-        **{e.text: e.entity_type.name for e in dynamic_abbr_defs},
-    }
-    abbr_def_to_entity = {entity.text: entity for entity in dynamic_abbr_defs}
+def _resolve_overlaps_keep_earliest[T: Segment](
+    segments: list[T], direct_only: bool = False
+) -> list[T]:
+    result = []
+    prev_end = -1
 
-    extractor = KeywordExtractor(keywords=keyword_to_type.keys(), ignore_overlaps=True)
-    found_segments = extractor.extract(text)
-
-    for segment in found_segments:
-        type_ = keyword_to_type.get(segment.text)
-
-        if type_ is None:
-            raise ValueError(f"Unknown keyword: {segment.text}")
-
-        entity_type = EntityType.__members__.get(type_.upper())
-        if entity_type is None:
-            logger.debug(f"Ignored entity with unrecognized type '{type_}': {segment}")
-            continue
-
-        # dynamic abbreviation
-        abbr_def = abbr_def_to_entity.get(segment.text)
-        if abbr_def and segment.start < abbr_def.start:
-            logger.debug(f"Ignored '{segment}' before its definition: {abbr_def}")
-            continue
-
-        yield Entity.of(segment, entity_type, refers_to=abbr_def)
+    for segment in segments:
+        if segment.start >= prev_end:
+            result.append(segment)
+            prev_end = segment.end
+        if not direct_only:
+            prev_end = max(prev_end, segment.end)
+    return result

@@ -1,375 +1,385 @@
+"""Unit tests for the optimized postprocessor module."""
+
 import unittest
 
-from recognition.datamodels import Segment
-from recognition.resolver import resolve_overlaps
+from recognition.resolver import (
+    _associate_entities,
+    _associate_attributes,
+    _associate_ref_definitions,
+    _associate_ref_defs_for_dynamic_abbr,
+    _is_not_sentence_ending,
+    _startswith_single_left_bracket,
+    _skip_leading_whitespace,
+    _skip_whitespace_and_tags,
+)
+from recognition.datamodels import Entity, EntityType
 
 
-def to_simple(segments: list[Segment]) -> list[tuple[str, int, int]]:
-    """Helper function to convert segments to simple tuples for easier testing."""
-    return [(s.text, s.start, s.end) for s in segments]
+class TestAssociate(unittest.TestCase):
+    """Test the main associate function."""
+
+    def test_empty_entities_returns_unchanged(self):
+        """Test that empty entities list returns unchanged."""
+        _associate_entities("test text", [])
+        # Function modifies entities in-place and returns None
+
+    def test_valid_entities_processed(self):
+        """Test that valid entities are processed correctly."""
+        text = "Some law (2023)"
+        entities = [Entity("Some law", 0, 8, EntityType.LAW_TITLE)]
+        _associate_entities(text, entities)
+        # Function modifies entities in-place and returns None
+
+    def test_entities_with_dependencies_processed(self):
+        """Test that entities with dependencies are processed."""
+        text = "Law Title (2023)"
+        law_title = Entity("Law Title", 0, 9, EntityType.LAW_TITLE)
+        date = Entity("2023", 11, 15, EntityType.DATE)
+        entities = [law_title, date]
+
+        _associate_entities(text, entities)
+        # The law title should have the date as an attribute
+        self.assertIsNotNone(law_title.attrs)
+        self.assertIn(date, law_title.attrs)
 
 
-class TestResolveOverlaps(unittest.TestCase):
-    """Test cases for the resolve_overlaps function."""
+class TestAssociateAttributes(unittest.TestCase):
+    """Test the _associate_attributes function."""
 
-    def test_empty_input(self) -> None:
-        """Test that empty input returns empty list."""
-        self.assertEqual(resolve_overlaps([], "longest"), [])
+    def test_forward_association_with_date(self):
+        """Test forward association with date attribute."""
+        text = "Law Title (2023)"
+        law_title = Entity("Law Title", 0, 9, EntityType.LAW_TITLE)
+        date = Entity("2023", 11, 15, EntityType.DATE)
 
-    def test_single_segment(self) -> None:
-        """Test that single segment is returned unchanged."""
-        segment = Segment("test", 0, 5)
-        result = resolve_overlaps([segment], "longest")
-        self.assertEqual(result, [segment])
+        _associate_attributes(text, [law_title], iter([date]))
 
-    def test_no_overlaps(self) -> None:
-        """Test segments with no overlaps are all returned."""
-        segments = [
-            Segment("a", 0, 3),
-            Segment("b", 5, 8),
-            Segment("c", 10, 13),
-        ]
-        result = resolve_overlaps(segments, "longest")
-        self.assertEqual(to_simple(result), [("a", 0, 3), ("b", 5, 8), ("c", 10, 13)])
+        self.assertIsNotNone(law_title.attrs)
+        self.assertIn(date, law_title.attrs)
 
-    def test_invalid_strategy_raises_error(self) -> None:
-        """Test that invalid strategy raises appropriate error."""
-        segments = [Segment("test", 0, 5)]
-        with self.assertRaises(UnboundLocalError):
-            resolve_overlaps(segments, "invalid_strategy")  # type: ignore
+    def test_forward_association_with_issue_no(self):
+        """Test forward association with issue number."""
+        text = "Law Title (No. 123)"
+        law_title = Entity("Law Title", 0, 9, EntityType.LAW_TITLE)
+        issue_no = Entity("No. 123", 11, 18, EntityType.ISSUE_NO)
 
+        _associate_attributes(text, [law_title], iter([issue_no]))
 
-class TestLongestStrategy(unittest.TestCase):
-    """Test cases for the 'longest' strategy."""
+        self.assertIsNotNone(law_title.attrs)
+        self.assertIn(issue_no, law_title.attrs)
 
-    def test_longest_basic_overlap(self) -> None:
-        """Test basic overlap resolution keeping longest segment."""
-        segments = [
-            Segment("short", 0, 3),
-            Segment("longer", 2, 8),
-        ]
-        result = resolve_overlaps(segments, "longest")
-        self.assertEqual(to_simple(result), [("longer", 2, 8)])
+    def test_backward_association(self):
+        """Test backward association."""
+        text = "2023 Law Title"
+        date = Entity("2023", 0, 4, EntityType.DATE)
+        law_title = Entity("Law Title", 5, 13, EntityType.LAW_TITLE)
 
-    def test_longest_multiple_overlaps(self) -> None:
-        """Test multiple overlapping segments keeping longest."""
-        segments = [
-            Segment("a", 0, 5),
-            Segment("b", 4, 7),
-            Segment("c", 6, 10),
-        ]
-        result = resolve_overlaps(segments, "longest")
-        # All segments overlap in a chain, keep the longest one (a has length 5)
-        self.assertEqual(to_simple(result), [("a", 0, 5)])
+        _associate_attributes(text, [law_title], iter([date]))
 
-    def test_longest_chain_overlaps(self) -> None:
-        """Test chained overlaps with longest strategy."""
-        segments = [
-            Segment("a", 0, 3),
-            Segment("b", 2, 5),
-            Segment("c", 4, 7),
-            Segment("d", 6, 9),
-        ]
-        result = resolve_overlaps(segments, "longest")
-        # All segments overlap in a chain, keep the longest one (all have length 3, so keep first)
-        self.assertEqual(to_simple(result), [("a", 0, 3)])
+        self.assertIsNotNone(law_title.attrs)
+        self.assertIn(date, law_title.attrs)
 
-    def test_longest_direct_only_true(self) -> None:
-        """Test longest strategy with direct_only=True."""
-        segments = [
-            Segment("a", 0, 5),
-            Segment("b", 4, 7),
-            Segment("c", 6, 10),
-        ]
-        result = resolve_overlaps(segments, "longest", direct_only=True)
-        # Only direct overlaps considered: (a,b) and (b,c) separately
-        # Between a(0-5) and b(4-7): keep a (longer)
-        # Between b(4-7) and c(6-10): keep c (longer)
-        self.assertEqual(to_simple(result), [("a", 0, 5), ("c", 6, 10)])
+    def test_no_association_with_sentence_ending(self):
+        """Test that no association occurs across sentence endings."""
+        text = "Law Title. 2023"
+        law_title = Entity("Law Title", 0, 9, EntityType.LAW_TITLE)
+        date = Entity("2023", 11, 15, EntityType.DATE)
 
-    def test_longest_direct_only_false(self) -> None:
-        """Test longest strategy with direct_only=False (default)."""
-        segments = [
-            Segment("a", 0, 5),
-            Segment("b", 4, 7),
-            Segment("c", 6, 10),
-        ]
-        result = resolve_overlaps(segments, "longest", direct_only=False)
-        # All segments form one overlapping chain, keep the longest (a has length 5)
-        self.assertEqual(to_simple(result), [("a", 0, 5)])
+        _associate_attributes(text, [law_title], iter([date]))
 
-    def test_longest_tie_breaking(self) -> None:
-        """Test longest strategy when segments have same length."""
-        segments = [
-            Segment("a", 0, 3),
-            Segment("b", 2, 5),
-        ]
-        result = resolve_overlaps(segments, "longest")
-        # Both have same length, should keep the first one (earliest start)
-        self.assertEqual(to_simple(result), [("a", 0, 3)])
+        # Should not associate across sentence ending
+        self.assertEqual(len(law_title.attrs), 0)
 
-    def test_longest_unsorted_input(self) -> None:
-        """Test that input is properly sorted before processing."""
-        segments = [
-            Segment("c", 6, 10),
-            Segment("a", 0, 5),
-            Segment("b", 4, 7),
-        ]
-        result = resolve_overlaps(segments, "longest")
-        # Should be sorted by start position first, then longest selected (a has length 5)
-        self.assertEqual(to_simple(result), [("a", 0, 5)])
+    def test_no_association_without_bracket(self):
+        """Test that forward association requires bracket."""
+        text = "Law Title 2023"
+        law_title = Entity("Law Title", 0, 9, EntityType.LAW_TITLE)
+        date = Entity("2023", 10, 14, EntityType.DATE)
+
+        _associate_attributes(text, [law_title], iter([date]))
+
+        # Should not associate without bracket
+        self.assertEqual(len(law_title.attrs), 0)
 
 
-class TestEarliestStrategy(unittest.TestCase):
-    """Test cases for the 'earliest' strategy."""
+class TestAssociateReferences(unittest.TestCase):
+    """Test the _associate_references function."""
 
-    def test_earliest_basic_overlap(self) -> None:
-        """Test basic overlap resolution keeping earliest segment."""
-        segments = [
-            Segment("first", 0, 5),
-            Segment("second", 3, 8),
-        ]
-        result = resolve_overlaps(segments, "earliest")
-        self.assertEqual(to_simple(result), [("first", 0, 5)])
+    def test_basic_reference_association(self):
+        """Test basic reference association."""
+        text = "Law Title Article 1"
+        law_title = Entity("Law Title", 0, 9, EntityType.LAW_TITLE)
+        article = Entity("Article 1", 10, 19, EntityType.LAW_ARTICLE_NO)
 
-    def test_earliest_multiple_overlaps(self) -> None:
-        """Test multiple overlapping segments keeping earliest."""
-        segments = [
-            Segment("a", 0, 5),
-            Segment("b", 4, 7),
-            Segment("c", 6, 10),
-        ]
-        result = resolve_overlaps(segments, "earliest")
-        # All segments overlap in a chain, keep only the first (earliest)
-        self.assertEqual(to_simple(result), [("a", 0, 5)])
+        _associate_ref_definitions(text, [article], iter([law_title]))
 
-    def test_earliest_chain_overlaps(self) -> None:
-        """Test chained overlaps with earliest strategy."""
-        segments = [
-            Segment("a", 0, 3),
-            Segment("b", 2, 5),
-            Segment("c", 4, 7),
-            Segment("d", 6, 9),
-        ]
-        result = resolve_overlaps(segments, "earliest")
-        # All segments overlap in a chain, keep only the first (earliest)
-        self.assertEqual(to_simple(result), [("a", 0, 3)])
+        self.assertEqual(article.refers_to, law_title)
 
-    def test_earliest_direct_only_true(self) -> None:
-        """Test earliest strategy with direct_only=True."""
-        segments = [
-            Segment("a", 0, 5),
-            Segment("b", 4, 7),
-            Segment("c", 6, 10),
-        ]
-        result = resolve_overlaps(segments, "earliest", direct_only=True)
-        # Only direct overlaps considered
-        self.assertEqual(to_simple(result), [("a", 0, 5), ("c", 6, 10)])
+    def test_no_association_with_sentence_ending(self):
+        """Test that no association occurs across sentence endings."""
+        text = "Law Title. Article 1"
+        law_title = Entity("Law Title", 0, 9, EntityType.LAW_TITLE)
+        article = Entity("Article 1", 11, 20, EntityType.LAW_ARTICLE_NO)
 
-    def test_earliest_direct_only_false(self) -> None:
-        """Test earliest strategy with direct_only=False (default)."""
-        segments = [
-            Segment("a", 0, 5),
-            Segment("b", 4, 7),
-            Segment("c", 6, 10),
-        ]
-        result = resolve_overlaps(segments, "earliest", direct_only=False)
-        # All segments form one overlapping chain, keep only the first
-        self.assertEqual(to_simple(result), [("a", 0, 5)])
+        _associate_ref_definitions(text, [article], iter([law_title]))
 
-    def test_earliest_no_overlaps(self) -> None:
-        """Test earliest strategy with no overlapping segments."""
-        segments = [
-            Segment("a", 0, 3),
-            Segment("b", 5, 8),
-            Segment("c", 10, 13),
-        ]
-        result = resolve_overlaps(segments, "earliest")
-        self.assertEqual(to_simple(result), [("a", 0, 3), ("b", 5, 8), ("c", 10, 13)])
+        # Should not associate across sentence ending
+        self.assertIsNone(article.refers_to)
 
-    def test_earliest_adjacent_segments(self) -> None:
-        """Test earliest strategy with adjacent (non-overlapping) segments."""
-        segments = [
-            Segment("a", 0, 3),
-            Segment("b", 3, 6),
-            Segment("c", 6, 9),
-        ]
-        result = resolve_overlaps(segments, "earliest")
-        # Adjacent segments don't overlap, all should be kept
-        self.assertEqual(to_simple(result), [("a", 0, 3), ("b", 3, 6), ("c", 6, 9)])
+    def test_no_reference_found(self):
+        """Test when no reference is found."""
+        text = "Article 1"
+        article = Entity("Article 1", 0, 9, EntityType.LAW_ARTICLE_NO)
+
+        _associate_ref_definitions(text, [article], iter([]))
+
+        self.assertIsNone(article.refers_to)
 
 
-class TestEarliestLongestStrategy(unittest.TestCase):
-    """Test cases for the 'earliest_longest' strategy."""
+class TestAssociateReferencesForDynamicAbbr(unittest.TestCase):
+    """Test the _associate_references_for_dynamic_abbr function."""
 
-    def test_earliest_longest_basic(self) -> None:
-        """Test basic earliest_longest strategy."""
-        segments = [
-            Segment("short", 0, 3),
-            Segment("longer", 0, 8),
-        ]
-        result = resolve_overlaps(segments, "earliest_longest")
-        # Same start position, keep the longer one
-        self.assertEqual(to_simple(result), [("longer", 0, 8)])
+    def test_basic_dynamic_abbr_association(self):
+        """Test basic dynamic abbreviation association."""
+        text = "Law Title (Abbr) Abbr"
+        law_title = Entity("Law Title", 0, 9, EntityType.LAW_TITLE)
+        abbr_def = Entity("Abbr", 11, 15, EntityType.LAW_DYNAMIC_ABBR)
+        
+        abbr_ref1 = Entity("Abbr", 11, 15, EntityType.LAW_DYNAMIC_ABBR)
+        abbr_ref2 = Entity("Abbr", 17, 21, EntityType.LAW_DYNAMIC_ABBR)
+        
+        # Set up the existing reference
+        abbr_ref1.refers_to = abbr_def
+        abbr_ref2.refers_to = abbr_def
 
-    def test_earliest_longest_different_starts(self) -> None:
-        """Test earliest_longest with different start positions."""
-        segments = [
-            Segment("a", 0, 5),
-            Segment("b", 2, 7),
-            Segment("c", 4, 9),
-        ]
-        result = resolve_overlaps(segments, "earliest_longest")
-        # All segments overlap in a chain, keep only the first (earliest)
-        self.assertEqual(to_simple(result), [("a", 0, 5)])
+        _associate_ref_defs_for_dynamic_abbr(text, [abbr_ref1, abbr_ref2], iter([law_title]))
 
-    def test_earliest_longest_tie_breaking(self) -> None:
-        """Test earliest_longest tie breaking (earliest first, then longest)."""
-        segments = [
-            Segment("a", 0, 3),
-            Segment("b", 0, 5),
-            Segment("c", 2, 4),
-        ]
-        result = resolve_overlaps(segments, "earliest_longest")
-        # Among segments starting at 0, keep the longest (b)
-        # Then check if c overlaps with b
-        self.assertEqual(to_simple(result), [("b", 0, 5)])
+        # The abbreviation should now refer to the law title
+        self.assertEqual(abbr_ref1.refers_to, law_title)
+        self.assertEqual(abbr_ref2.refers_to, law_title)
 
-    def test_earliest_longest_direct_only_true(self) -> None:
-        """Test earliest_longest strategy with direct_only=True."""
-        segments = [
-            Segment("a", 0, 5),
-            Segment("b", 4, 7),
-            Segment("c", 6, 10),
-        ]
-        result = resolve_overlaps(segments, "earliest_longest", direct_only=True)
-        # Only direct overlaps considered
-        self.assertEqual(to_simple(result), [("a", 0, 5), ("c", 6, 10)])
+    def test_missing_definition_raises_error(self):
+        """Test that missing definition raises ValueError."""
+        text = "Abbr reference"
+        abbr_ref = Entity("Abbr reference", 0, 14, EntityType.LAW_DYNAMIC_ABBR)
+        # No refers_to set
 
-    def test_earliest_longest_direct_only_false(self) -> None:
-        """Test earliest_longest strategy with direct_only=False (default)."""
-        segments = [
-            Segment("a", 0, 5),
-            Segment("b", 4, 7),
-            Segment("c", 6, 10),
-        ]
-        result = resolve_overlaps(segments, "earliest_longest", direct_only=False)
-        # All segments form one overlapping chain, keep only the first
-        self.assertEqual(to_simple(result), [("a", 0, 5)])
+        with self.assertRaises(ValueError) as context:
+            _associate_ref_defs_for_dynamic_abbr(text, [abbr_ref], iter([]))
+        self.assertIn("Missing definition for dynamic abbreviation", str(context.exception))
+
+
+class TestHelperFunctions(unittest.TestCase):
+    """Test helper functions."""
+
+    def test_is_not_sentence_ending_no_ending(self):
+        """Test _is_not_sentence_ending with no sentence ending."""
+        text = "This is a sentence"
+        result = _is_not_sentence_ending(text, 0, len(text))
+        self.assertTrue(result)
+
+    def test_is_not_sentence_ending_with_ending(self):
+        """Test _is_not_sentence_ending with sentence ending."""
+        text = "This is a sentence!"
+        result = _is_not_sentence_ending(text, 0, len(text))
+        self.assertFalse(result)
+
+    def test_is_not_sentence_ending_with_chinese_ending(self):
+        """Test _is_not_sentence_ending with Chinese sentence ending."""
+        text = "这是一个句子。"
+        result = _is_not_sentence_ending(text, 0, len(text))
+        self.assertFalse(result)
+
+    def test_startswith_single_left_bracket_valid(self):
+        """Test _startswith_single_left_bracket with valid input."""
+        text = " (content)"
+        result = _startswith_single_left_bracket(text, 0, len(text))
+        self.assertTrue(result)
+
+    def test_startswith_single_left_bracket_no_bracket(self):
+        """Test _startswith_single_left_bracket with no bracket."""
+        text = "content"
+        result = _startswith_single_left_bracket(text, 0, len(text))
+        self.assertFalse(result)
+
+    def test_startswith_single_left_bracket_multiple_brackets(self):
+        """Test _startswith_single_left_bracket with multiple brackets."""
+        text = " ((content))"
+        result = _startswith_single_left_bracket(text, 0, len(text))
+        self.assertFalse(result)
+
+    def test_startswith_single_left_bracket_with_tags(self):
+        """Test _startswith_single_left_bracket with HTML tags."""
+        text = " <div>(content)</div>"
+        result = _startswith_single_left_bracket(text, 0, len(text))
+        self.assertTrue(result)
+
+    def test_skip_leading_whitespace_no_spaces(self):
+        """Test _skip_leading_whitespace with no leading spaces."""
+        text = "content"
+        result = _skip_leading_whitespace(text, 0, len(text))
+        self.assertEqual(result, 0)
+
+    def test_skip_leading_whitespace_with_spaces(self):
+        """Test _skip_leading_whitespace with leading spaces."""
+        text = "   content"
+        result = _skip_leading_whitespace(text, 0, len(text))
+        self.assertEqual(result, 3)
+
+    def test_skip_leading_whitespace_all_spaces(self):
+        """Test _skip_leading_whitespace with all spaces."""
+        text = "   "
+        result = _skip_leading_whitespace(text, 0, len(text))
+        self.assertEqual(result, 3)
+
+    def test_skip_whitespace_and_tags_no_tag(self):
+        """Test _skip_whitespace_and_tags with no tag."""
+        text = "content"
+        result = _skip_whitespace_and_tags(text, 0, len(text))
+        self.assertEqual(result, 0)
+
+    def test_skip_whitespace_and_tags_with_tag(self):
+        """Test _skip_whitespace_and_tags with HTML tag."""
+        text = "<div>content</div>"
+        result = _skip_whitespace_and_tags(text, 0, len(text))
+        self.assertEqual(result, 5)  # After <div>
+
+    def test_skip_whitespace_and_tags_incomplete_tag(self):
+        """Test _skip_whitespace_and_tags with incomplete tag."""
+        text = "<div content"
+        result = _skip_whitespace_and_tags(text, 0, len(text))
+        self.assertEqual(result, 0)  # No closing >
+
+
+class TestCompleteWorkflow(unittest.TestCase):
+    """Test complete association workflow with multiple entities."""
+
+    def test_complete_association_workflow(self):
+        """Test complete association workflow with multiple entities."""
+        text = "Civil Code (2020) and Criminal Law (2019)"
+
+        # Create entities
+        civil_code = Entity("Civil Code", 0, 10, EntityType.LAW_TITLE)
+        criminal_law = Entity("Criminal Law", 22, 34, EntityType.LAW_TITLE)
+        date_2020 = Entity("2020", 12, 16, EntityType.DATE)
+        date_2019 = Entity("2019", 36, 40, EntityType.DATE)
+
+        entities = [civil_code, criminal_law, date_2020, date_2019]
+
+        # Process associations
+        _associate_entities(text, entities)
+
+        # Civil Code should have 2020 date
+        self.assertIsNotNone(civil_code.attrs)
+        self.assertIn(date_2020, civil_code.attrs)
+
+        # Criminal Law should have 2019 date
+        self.assertIsNotNone(criminal_law.attrs)
+        self.assertIn(date_2019, criminal_law.attrs)
+
+    def test_complex_nested_structure(self):
+        """Test association with complex nested structure."""
+        text = "Supreme Court (Judicial Committee) Civil Code (2020)"
+
+        # Create entities
+        supreme_court = Entity("Supreme Court", 0, 13, EntityType.PROMULGATOR)
+        judicial_committee = Entity("Judicial Committee", 15, 32, EntityType.PROMULGATOR)
+        civil_code = Entity("Civil Code", 35, 45, EntityType.LAW_TITLE)
+        date = Entity("2020", 47, 51, EntityType.DATE)
+
+        entities = [supreme_court, judicial_committee, civil_code, date]
+
+        # Process associations
+        _associate_entities(text, entities)
+
+        # Civil Code should have the date
+        self.assertIsNotNone(civil_code.attrs)
+        self.assertIn(date, civil_code.attrs)
+
+    def test_multiple_law_titles_with_attributes(self):
+        """Test association with multiple law titles and attributes."""
+        text = "Civil Code (2020), Criminal Law (2019), Administrative Law (2021)"
+
+        # Create entities
+        civil_code = Entity("Civil Code", 0, 10, EntityType.LAW_TITLE)
+        date_2020 = Entity("2020", 12, 16, EntityType.DATE)
+        criminal_law = Entity("Criminal Law", 19, 31, EntityType.LAW_TITLE)
+        date_2019 = Entity("2019", 33, 37, EntityType.DATE)
+        admin_law = Entity("Administrative Law", 40, 58, EntityType.LAW_TITLE)
+        date_2021 = Entity("2021", 60, 64, EntityType.DATE)
+
+        entities = [civil_code, date_2020, criminal_law, date_2019, admin_law, date_2021]
+
+        # Process associations
+        _associate_entities(text, entities)
+
+        # Each law should have its corresponding date
+        self.assertIn(date_2020, civil_code.attrs)
+        self.assertIn(date_2019, criminal_law.attrs)
+        self.assertIn(date_2021, admin_law.attrs)
 
 
 class TestEdgeCases(unittest.TestCase):
     """Test edge cases and boundary conditions."""
 
-    def test_zero_length_segments(self) -> None:
-        """Test segments with zero length."""
-        segments = [
-            Segment("a", 0, 0),
-            Segment("b", 0, 5),
-        ]
-        result = resolve_overlaps(segments, "longest")
-        # Zero-length segment at position 0 does not overlap with (0,5)
-        # since zero-length segments have no actual content
-        # Both segments should be kept
-        self.assertEqual(to_simple(result), [("a", 0, 0), ("b", 0, 5)])
+    def test_empty_text(self):
+        """Test association with empty text."""
+        entities: list[Entity] = []
+        _associate_entities("", entities)
+        # Function modifies entities in-place and returns None
 
-    def test_negative_positions(self) -> None:
-        """Test segments with negative positions."""
-        segments = [
-            Segment("a", -5, -2),
-            Segment("b", -3, 0),
-        ]
-        result = resolve_overlaps(segments, "longest")
-        # Should handle negative positions correctly
-        # a has length 3, b has length 3, keep first (a)
-        self.assertEqual(to_simple(result), [("a", -5, -2)])
+    def test_single_entity(self):
+        """Test association with single entity."""
+        text = "Law Title"
+        law_title = Entity("Law Title", 0, 9, EntityType.LAW_TITLE)
+        entities = [law_title]
 
-    def test_very_large_positions(self) -> None:
-        """Test segments with very large positions."""
-        segments = [
-            Segment("a", 1000000, 1000005),
-            Segment("b", 1000003, 1000008),
-        ]
-        result = resolve_overlaps(segments, "longest")
-        # Should handle large numbers correctly
-        # Both have length 5, keep first (a)
-        self.assertEqual(to_simple(result), [("a", 1000000, 1000005)])
+        _associate_entities(text, entities)
+        # No attributes should be added
+        self.assertEqual(len(law_title.attrs), 0)
 
-    def test_identical_segments(self) -> None:
-        """Test identical segments."""
-        segments = [
-            Segment("a", 0, 5),
-            Segment("a", 0, 5),
-        ]
-        result = resolve_overlaps(segments, "longest")
-        # Identical segments should be deduplicated to one segment
-        self.assertEqual(to_simple(result), [("a", 0, 5)])
+    def test_entities_without_dependencies(self):
+        """Test entities without dependencies."""
+        text = "Some text"
+        entity = Entity("Some text", 0, 9, EntityType.DATE)
+        entities = [entity]
 
-    def test_contained_segments(self) -> None:
-        """Test one segment completely contained within another."""
-        segments = [
-            Segment("outer", 0, 10),
-            Segment("inner", 3, 7),
-        ]
-        result = resolve_overlaps(segments, "longest")
-        # Should keep the longer (outer) segment
-        self.assertEqual(to_simple(result), [("outer", 0, 10)])
+        _associate_entities(text, entities)
+        # No changes should occur
+        self.assertEqual(len(entity.attrs), 0)
 
-    def test_contained_segments_earliest_strategy(self) -> None:
-        """Test contained segments with earliest strategy."""
-        segments = [
-            Segment("outer", 0, 10),
-            Segment("inner", 3, 7),
-        ]
-        result = resolve_overlaps(segments, "earliest")
-        # Should keep only the first (earliest) segment
-        self.assertEqual(to_simple(result), [("outer", 0, 10)])
+    def test_very_long_text(self):
+        """Test association with very long text."""
+        long_text = "A" * 10000 + " (2020)"
+        law_title = Entity("A" * 10000, 0, 10000, EntityType.LAW_TITLE)
+        date = Entity("2020", 10002, 10006, EntityType.DATE)
+        entities = [law_title, date]
 
+        _associate_entities(long_text, entities)
+        self.assertIn(date, law_title.attrs)
 
-class TestComplexScenarios(unittest.TestCase):
-    """Test complex real-world scenarios."""
+    def test_unicode_content(self):
+        """Test association with Unicode content."""
+        text = "民法典（2020年）"
+        law_title = Entity("民法典", 0, 3, EntityType.LAW_TITLE)
+        date = Entity("2020年", 4, 9, EntityType.DATE)
+        entities = [law_title, date]
 
-    def test_mixed_overlap_patterns(self) -> None:
-        """Test complex patterns with mixed overlaps."""
-        segments = [
-            Segment("a", 0, 5),
-            Segment("b", 3, 8),
-            Segment("c", 7, 12),
-            Segment("d", 10, 15),
-            Segment("e", 20, 25),
-        ]
-        result = resolve_overlaps(segments, "longest")
-        # First group (a,b,c,d) overlaps, keep longest (a has length 5)
-        # Second group (e) is separate
-        self.assertEqual(to_simple(result), [("a", 0, 5), ("e", 20, 25)])
+        _associate_entities(text, entities)
+        self.assertIn(date, law_title.attrs)
 
-    def test_mixed_overlap_patterns_earliest(self) -> None:
-        """Test complex patterns with earliest strategy."""
-        segments = [
-            Segment("a", 0, 5),
-            Segment("b", 3, 8),
-            Segment("c", 7, 12),
-            Segment("d", 10, 15),
-            Segment("e", 20, 25),
-        ]
-        result = resolve_overlaps(segments, "earliest")
-        # Should keep earliest non-overlapping segments
-        self.assertEqual(to_simple(result), [("a", 0, 5), ("e", 20, 25)])
+    def test_mixed_bracket_types(self):
+        """Test association with mixed bracket types."""
+        text = "Law Title (2020) and Other Law （2021）"
+        law_title1 = Entity("Law Title", 0, 9, EntityType.LAW_TITLE)
+        date1 = Entity("2020", 11, 15, EntityType.DATE)
+        law_title2 = Entity("Other Law", 21, 30, EntityType.LAW_TITLE)
+        date2 = Entity("2021", 32, 36, EntityType.DATE)
+        entities = [law_title1, date1, law_title2, date2]
 
-    def test_unsorted_complex_input(self) -> None:
-        """Test that complex unsorted input is handled correctly."""
-        segments = [
-            Segment("e", 20, 25),
-            Segment("a", 0, 5),
-            Segment("c", 7, 12),
-            Segment("b", 3, 8),
-            Segment("d", 10, 15),
-        ]
-        result = resolve_overlaps(segments, "longest")
-        # Should sort by start position and then apply longest strategy
-        # First group (a,b,c,d) overlaps, keep longest (a has length 5)
-        # Second group (e) is separate
-        self.assertEqual(to_simple(result), [("a", 0, 5), ("e", 20, 25)])
+        _associate_entities(text, entities)
+        self.assertIn(date1, law_title1.attrs)
+        self.assertIn(date2, law_title2.attrs)
 
 
 if __name__ == "__main__":

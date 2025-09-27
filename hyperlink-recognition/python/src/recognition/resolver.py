@@ -1,102 +1,244 @@
-from collections.abc import Iterable
-from typing import Literal
+import xml.etree.ElementTree as ET
+from collections.abc import Callable, Generator, Iterable, Iterator
+from itertools import chain
+from typing import Any, Final
 
-from recognition.datamodels import Segment
+from recognition.datamodels import Entity, EntityType
+from recognition.helper import resolve_overlaps
+from structures import LookupDict
+from utils import coll_util, text_util
+
+_LEFT_BRACKETS: Final = {"(", "（"}  # noqa: RUF001
+_SENTENCE_ENDING: Final = {"?", "!", ".", "。", "？", "！"}  # noqa: RUF001
 
 
-def resolve_overlaps[T: Segment](
-    iterable: Iterable[T],
-    strategy: Literal["longest", "earliest", "earliest_longest"],
-    direct_only: bool = False,
-) -> list[T]:
+def resolve_entities(text: str, entities: Iterator[Entity]) -> list[Entity]:
+    # Post-process to filter out invalid entities
+    entities = _validate_entities(text, entities)
+
+    # If two entities have the same (start, end), the first one will remain,
+    # so the earlier position has higher priority.
+    entity_list = resolve_overlaps(entities, strategy="longest", direct_only=True)
+
+    _associate_entities(text, entity_list)
+    return _remove_orphan_entities(entities)
+
+
+def _validate_entities(
+    text: str, entities: Iterable[Entity]
+) -> Generator[Entity, Any, None]:
     """
-    Resolve overlapping segments according to the specified strategy.
-
-    This function processes a sequence of Segment objects and removes overlaps
-    according to the chosen strategy. Optionally, you can restrict overlap
-    handling to *direct* overlaps only.
-
-    Args:
-        iterable: An iterable of Segment objects.
-        strategy: The overlap resolution strategy. One of:
-            - "longest": For each group of overlapping segments, keep the longest.
-            - "earliest": Keep the earliest non-overlapping segments.
-            - "earliest_longest": Prefer earliest, break ties by longest.
-        direct_only: If True, only directly overlapping segments are considered
-                        conflicts; indirectly overlapping segments (via a chain of
-                        overlaps) are treated as separate. Default is False.
-
-    Returns:
-        A list of resolved, non-overlapping Segment objects.
-
-    Examples::
-
-        # Suppose we have three segments: (0, 5), (4, 7), (6, 10)
-        segments = [Segment(0, 5), Segment(4, 7), Segment(6, 10)]
-
-        # Longest strategy, chained overlaps (direct_only=False)
-        resolve_overlaps(segments, "longest", direct_only=False)
-
-        # Output: [(0, 5)]  -> the overlapping chain (0-5,4-7,6-10) is merged,
-        #           keeping the longest segment
-
-        # Longest strategy, direct overlaps only (direct_only=True)
-        resolve_overlaps(segments, "longest", direct_only=True)
-        # Output: [(0, 5), (6, 10)] -> only direct overlaps are considered,
-        #           so (0,5) and (4,7) are compared separately from (6,10)
+    Valid entity text is a valid XML fragment without unclosed tags
     """
-    match strategy:
-        case "longest":
-            segments = sorted(iterable, key=lambda x: x.start)
-            func = _resolve_overlaps_keep_longest
-        case "earliest":
-            segments = sorted(iterable, key=lambda x: x.start)
-            func = _resolve_overlaps_keep_earliest
-        case "earliest_longest":
-            segments = sorted(iterable, key=lambda x: (x.start, -x.end))
-            func = _resolve_overlaps_keep_earliest
-
-    if not segments:
-        return []
-    return func(segments, direct_only)
+    validations: tuple[Callable[[str, Entity], bool], ...] = (
+        _is_unmarked_hyperlink,
+        _is_valid_xml_fragment,
+    )
+    yield from (x for x in entities if all(v(text, x) for v in validations))
 
 
-def _resolve_overlaps_keep_longest[T: Segment](
-    segments: list[T], direct_only: bool = False
-) -> list[T]:
-    result = []
-    longest = segments[0]
-    group_end = longest.end
+def _associate_entities(text: str, entities: list[Entity]) -> None:
+    """
+    Associate entities with their attributes based on entity type dependencies.
+    """
+    if not entities:
+        return
 
-    for index in range(1, len(segments)):
-        seg = segments[index]
-        # Check if segments overlap: seg.start < group_end
-        if seg.start < group_end:
-            # Segments overlap, keep the longer one
-            if (seg.end - seg.start) > (longest.end - longest.start):
-                longest = seg
-            group_end = longest.end if direct_only else max(group_end, seg.end)
+    associators = {
+        EntityType.LAW_TITLE: _associate_attributes,
+        EntityType.LAW_SELF: _associate_ref_definitions,
+        EntityType.THIS_LAW: _associate_ref_definitions,
+        EntityType.LAW_ARTICLE_NO: _associate_ref_definitions,
+        EntityType.LAW_DYNAMIC_ABBR: _associate_ref_defs_for_dynamic_abbr,
+    }
+
+    entities_by_type = coll_util.group_by(entities, key=lambda x: x.entity_type)
+
+    for entity_type, group in entities_by_type.items():
+        if entity_type.depends_on and (func := associators.get(entity_type)):
+            depends_on = chain.from_iterable(
+                entities_by_type.get(x, []) for x in entity_type.depends_on
+            )
+            func(text, group, depends_on)
+
+
+def _remove_orphan_entities(entities: Iterable[Entity]) -> list[Entity]:
+    """
+    Remove entities that require a reference but have none.
+    LAW_TITLE, CASE_NO and LAW_ABBR are allowed to exist independently.
+    """
+    remaining_types = {
+        EntityType.CASE_NO,
+        EntityType.LAW_ABBR,
+        EntityType.LAW_SELF,
+        EntityType.LAW_TITLE,
+    }
+    return [x for x in entities if x.refers_to or x.entity_type in remaining_types]
+
+
+def _associate_ref_definitions(
+    text: str,
+    entities: list[Entity],
+    references: Iterator[Entity],
+) -> None:
+    """
+    Link entities to the nearest reference before them.
+    """
+    end_index_lookup = LookupDict({x.end: x for x in references})
+
+    for entity in entities:
+        # forward lookup
+        if (
+            ref := end_index_lookup.floor(entity.start - 1)
+        ) and _is_not_sentence_ending(text, ref.end, entity.start):
+            entity.refers_to = ref
+
+
+def _associate_ref_defs_for_dynamic_abbr(
+    text: str,
+    entities: list[Entity],
+    references: Iterator[Entity],
+) -> None:
+    """
+    Link entities to the nearest reference before them for dynamic abbreviations.
+    """
+    end_index_lookup = LookupDict({x.end: x for x in references})
+
+    for abbr_ref in entities:
+        if abbr_ref.refers_to is None:
+            raise ValueError(f"Missing definition for dynamic abbreviation {abbr_ref}")
+
+        abbr_def = abbr_ref.refers_to
+        # forward lookup
+        if (ref := end_index_lookup.floor(abbr_def.start - 1)) and (
+            _is_not_sentence_ending(text, ref.end, abbr_def.start)
+            and _startswith_single_left_bracket(text, ref.end, abbr_def.start)
+        ):
+            abbr_ref.refers_to = ref
         else:
-            # No overlap, add the current longest to result and start new group
-            result.append(longest)
-            longest = seg
-            group_end = longest.end
-
-    # The last group
-    result.append(longest)
-    return result
+            abbr_ref.refers_to = None
 
 
-def _resolve_overlaps_keep_earliest[T: Segment](
-    segments: list[T], direct_only: bool = False
-) -> list[T]:
-    result = []
-    prev_end = -1
+def _associate_attributes(
+    text: str, entities: list[Entity], attrs: Iterator[Entity]
+) -> None:
+    """
+    Associate attributes (dates, issue numbers, promulgators) with entities.
+    """
+    forward_lookup_types = (EntityType.ISSUE_NO, EntityType.DATE)
+    end_index_lookup = LookupDict({x.end: x for x in entities})
+    start_index_lookup = LookupDict({x.start: x for x in entities})
 
-    for segment in segments:
-        if segment.start >= prev_end:
-            result.append(segment)
-            prev_end = segment.end
-        if not direct_only:
-            prev_end = max(prev_end, segment.end)
-    return result
+    for attr in attrs:
+        # forward lookup
+        if attr.entity_type in forward_lookup_types:
+            entity = end_index_lookup.floor(attr.start - 1)
+            if (
+                entity
+                and _is_not_sentence_ending(text, entity.end, attr.start)
+                and _startswith_single_left_bracket(text, entity.end, attr.start)
+            ):
+                entity.attrs.append(attr)
+                # A attribute by forward lookup can only be occupied by an entity.
+                continue
+
+        # backward lookup
+        entity = start_index_lookup.ceiling(attr.end)
+        if entity and _is_not_sentence_ending(text, attr.end, entity.start):
+            entity.attrs.append(attr)
+
+
+def _is_valid_xml_fragment(document: str, segment: Entity) -> bool:
+    """
+    Check whether a text segment is a valid XML fragment.
+    """
+    text = text_util.unescape_html_entities(segment.text)
+
+    # inside attribute value(e.g., <tag attr="...">)
+    last_open = document.rfind("<", 0, segment.start)
+    last_close = document.rfind(">", 0, segment.start)
+    if last_open != -1 and last_close < last_open:
+        return False
+
+    # strict validation
+    try:
+        ET.fromstring(f"<root>{text}</root>")  # noqa: S314
+    except ET.ParseError:
+        return False
+
+    return True
+
+
+def _is_unmarked_hyperlink(document: str, segment: Entity) -> bool:
+    """
+    Check whether a text segment is already marked with an <a> tag.
+    """
+    last_open = document.rfind("<a", 0, segment.start)
+    if last_open == -1:
+        return True
+    last_close = document.rfind("</a>", 0, segment.start)
+    return last_close != -1 and last_close > last_open
+
+
+def _is_not_sentence_ending(text: str, start: int, end: int) -> bool:
+    """
+    Check if the given range does not contain any sentence-ending character.
+    """
+    return all(text.find(x, start, end) == -1 for x in _SENTENCE_ENDING)
+
+
+def _startswith_single_left_bracket(text: str, start: int, end: int) -> bool:
+    """
+    Check if the text range starts with exactly one left bracket.
+
+    This function skips whitespace and HTML/XML tags, then verifies that:
+    1. The first non-whitespace character is a left bracket
+    2. There are no other left brackets in the range
+    """
+    # Skip leading whitespace and HTML/XML tags
+    idx = _skip_whitespace_and_tags(text, start, end)
+
+    # Ensure the first non-space character is a left bracket
+    if idx >= end or text[idx] not in _LEFT_BRACKETS:
+        return False
+
+    # Check if there is another left bracket in range
+    return not any(text.find(x, idx + 1, end) != -1 for x in _LEFT_BRACKETS)
+
+
+def _skip_whitespace_and_tags(text: str, start: int, end: int) -> int:
+    """
+    Skip leading whitespace and HTML/XML tags in the given range.
+    """
+    idx = start
+    while idx < end:
+        # Skip whitespace
+        next_idx = _skip_leading_whitespace(text, idx, end)
+        # Skip HTML/XML tags
+        next_idx = _skip_leading_element_tag(text, next_idx, end)
+        if next_idx == idx:
+            break
+
+        idx = next_idx
+
+    return idx
+
+
+def _skip_leading_whitespace(text: str, start: int, end: int) -> int:
+    """
+    Move past leading whitespace characters.
+    """
+    return next(
+        (i for i in range(start, end) if not text_util.is_whitespace(text[i])), end
+    )
+
+
+def _skip_leading_element_tag(text: str, start: int, end: int) -> int:
+    """
+    Move past leading HTML/XML element tags.
+    """
+    if text[start] == "<":
+        last_close = text.find(">", start, end)
+        if last_close > start:
+            return last_close + 1
+    return start

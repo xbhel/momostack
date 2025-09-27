@@ -323,9 +323,9 @@ def main() -> None:
             sys.exit(1)
 
     if func_to_benchmark is None:
-        from recognition.extractor import extract
+        from recognition.extractor import extract_entities
 
-        func_to_benchmark = extract
+        func_to_benchmark = extract_entities
 
     for text, _ in load_test_sources(args.sources):
         # Run benchmarks

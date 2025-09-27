@@ -3,24 +3,24 @@ from collections.abc import Callable, Generator, Iterable, Iterator
 from itertools import chain
 from typing import Any, Final
 
-from recognition.datamodels import Entity, EntityType
-from recognition.resolver import resolve_overlaps
-from structures import LookupDict
-from utils import coll_util, text_util
+from linkgen.helper import resolve_overlaps
+from linkgen.models import Entity, EntityType
+from linkgen.structures import LookupDict
+from linkgen.utils import coll_util, text_util
 
 _LEFT_BRACKETS: Final = {"(", "（"}  # noqa: RUF001
 _SENTENCE_ENDING: Final = {"?", "!", ".", "。", "？", "！"}  # noqa: RUF001
 
 
-def postprocess(text: str, entities: Iterable[Entity]) -> list[Entity]:
+def resolve_entities(text: str, entities: Iterator[Entity]) -> list[Entity]:
     # Post-process to filter out invalid entities
     entities = _validate_entities(text, entities)
 
     # If two entities have the same (start, end), the first one will remain,
     # so the earlier position has higher priority.
-    entities = resolve_overlaps(entities, strategy="longest", direct_only=True)
+    entity_list = resolve_overlaps(entities, strategy="longest", direct_only=True)
 
-    _associate_entities(text, entities)
+    _associate_entities(text, entity_list)
     return _remove_orphan_entities(entities)
 
 
@@ -213,31 +213,27 @@ def _skip_whitespace_and_tags(text: str, start: int, end: int) -> int:
     idx = start
     while idx < end:
         # Skip whitespace
-        next_idx = _move_space_after(text, idx, end)
-        if next_idx != idx:
-            idx = next_idx
-            continue
-
+        next_idx = _skip_leading_whitespace(text, idx, end)
         # Skip HTML/XML tags
-        next_idx = _move_element_tag_after(text, idx, end)
-        if next_idx != idx:
-            idx = next_idx
-            continue
+        next_idx = _skip_leading_element_tag(text, next_idx, end)
+        if next_idx == idx:
+            break
 
-        # No more skipping possible
-        break
+        idx = next_idx
 
     return idx
 
 
-def _move_space_after(text: str, start: int, end: int) -> int:
+def _skip_leading_whitespace(text: str, start: int, end: int) -> int:
     """
     Move past leading whitespace characters.
     """
-    return next((i for i in range(start, end) if not text[i].isspace()), end)
+    return next(
+        (i for i in range(start, end) if not text_util.is_whitespace(text[i])), end
+    )
 
 
-def _move_element_tag_after(text: str, start: int, end: int) -> int:
+def _skip_leading_element_tag(text: str, start: int, end: int) -> int:
     """
     Move past leading HTML/XML element tags.
     """

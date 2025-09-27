@@ -4,13 +4,12 @@ from collections import deque
 from collections.abc import Iterable
 from typing import Final
 
-from utils.coll_util import reverse_dict
-from utils.io_util import load_resource_json
+from linkgen.utils import coll_util, io_util
 
 _WHITESPACE_REGEX: Final = re.compile(r"\s+", re.UNICODE)
-_ASCII_MAPPING_TABLE: Final[dict[str, str]] = load_resource_json("AsciiMapping.json")
+_ASCII_MAPPING_TABLE: dict[str, str] = io_util.load_resource_json("AsciiMapping.json")
 _ASCII_TRANS_TABLE: Final = {ord(k): v for k, v in _ASCII_MAPPING_TABLE.items()}
-_ASCII_TO_VARIANTS: Final = reverse_dict(_ASCII_MAPPING_TABLE)
+_ASCII_TO_VARIANTS: Final = coll_util.reverse_dict(_ASCII_MAPPING_TABLE)
 
 
 def to_ascii(text: str) -> str:
