@@ -13,10 +13,15 @@ class EntityType(StrEnum):
     ISSUE_NO = auto(), ()
     PROMULGATOR = auto(), ()
     CASE_NO = auto(), ()
-    LAW_TITLE = auto(), ("DATE", "ISSUE_NO", "PROMULGATOR")
+    LAW_ABBR = auto(), ()
+    THIS_LAW = auto(), ("LAW_TITLE",)
     LAW_SELF = auto(), ("LAW_TITLE",)
-    LAW_ARTICLE_NO = auto(), ("LAW_TITLE",)
-    LAW_ABBR = auto(), ("LAW_TITLE",)
+    LAW_DYNAMIC_ABBR = auto(), ("LAW_TITLE",)
+    LAW_TITLE = auto(), ("DATE", "ISSUE_NO", "PROMULGATOR")
+    LAW_ARTICLE_NO = (
+        auto(),
+        ("LAW_TITLE", "LAW_DYNAMIC_ABBR", "LAW_ABBR", "THIS_LAW", "LAW_SELF"),
+    )
 
     def __new__(
         cls,

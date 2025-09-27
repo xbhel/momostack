@@ -1,7 +1,6 @@
 import logging
 import os
 import re
-import xml.etree.ElementTree as ET
 from abc import ABC, abstractmethod
 from collections import defaultdict, deque
 from collections.abc import Callable, Generator, Iterable, Iterator
@@ -12,8 +11,8 @@ import ahocorasick  # type: ignore  # noqa: PGH003
 
 from recognition.datamodels import Entity, EntityType, Segment
 from recognition.patterns import patterns
-from recognition.resolver import resolve_overlaps
-from utils import io_util, text_util
+from recognition.postprocessor import postprocess
+from utils import io_util
 
 __author__ = "xbhel"
 __email__ = "xbhel@outlook.com"
@@ -82,7 +81,7 @@ class PairedSymbolExtractor(Extractor):
 
     @override
     def extract(self, text: str) -> Iterable[Segment]:
-        """Extract terms according to the configured nesting strategy."""
+        """Extract segments according to the configured nesting strategy."""
         yield from self._extract_func(text)
 
     def _extract_all(self, text: str) -> Iterable[Segment]:
@@ -348,6 +347,7 @@ class ChainedExtractor(Extractor):
         return [segment for segments in segments_list for segment in segments]
 
 
+# Global extractors
 _DATE_EXTRACTOR: Final = PatternExtractor(patterns["date"])
 _CASE_NO_EXTRACTOR: Final = PatternExtractor(patterns["case_no"])
 _ISSUE_NO_EXTRACTOR = PatternExtractor(patterns["issue_nos"], True, 1)
@@ -369,10 +369,12 @@ def extract(text: str) -> list[Entity]:
     """
     # Extract entities within paired brackets (e.g., Issue No, Law Abbreviation)
     bracket_entities = list(_extract_bracketed_entities(text))
-    abbr_defs = [x for x in bracket_entities if x.entity_type == EntityType.LAW_ABBR]
+    dynamic_abbr_defs = [
+        x for x in bracket_entities if x.entity_type == EntityType.LAW_DYNAMIC_ABBR
+    ]
 
     # Extract entities by keywords, using abbreviations found in brackets as keywords
-    keyword_entities = _extract_keyword_entities(text, abbr_defs)
+    keyword_entities = _extract_keyword_entities(text, dynamic_abbr_defs)
 
     # Extract entities using direct pattern-based extractors
     pattern_entities = _extract_pattern_entities(text)
@@ -380,26 +382,22 @@ def extract(text: str) -> list[Entity]:
     # Merge all entity mappings, giving precedence to earlier updates.
     merged_entities = chain(bracket_entities, keyword_entities, pattern_entities)
 
-    # Post-process to filter out invalid entities
-    validated_entities = _validate_entities(text, merged_entities)
-
-    # If two entities have the same (start, end), the first one will remain,
-    # so the earlier position has higher priority.
-    return resolve_overlaps(validated_entities, strategy="longest", direct_only=True)
+    # Post-process to associate and filter out invalid entities
+    return postprocess(text, merged_entities)
 
 
 def _extract_pattern_entities(text: str) -> Generator[Entity, Any, None]:
     """
     Extracts entities from the text using predefined pattern-based extractors.
     """
-    type_to_extractor: dict[EntityType, Extractor] = {
+    extractor_by_type: dict[EntityType, Extractor] = {
         EntityType.DATE: _DATE_EXTRACTOR,
         EntityType.CASE_NO: _CASE_NO_EXTRACTOR,
         EntityType.LAW_TITLE: _LAW_TITLE_EXTRACTOR,
         EntityType.LAW_ARTICLE_NO: _ARTICLE_NO_EXTRACTOR,
     }
 
-    for entity_type, extractor in type_to_extractor.items():
+    for entity_type, extractor in extractor_by_type.items():
         segments = extractor.extract(text)
         yield from (Entity.of(segment, entity_type) for segment in segments)
 
@@ -409,9 +407,9 @@ def _extract_bracketed_entities(text: str) -> Generator[Entity, Any, None]:
     Extracts entities that are defined within paired brackets,
     such as Issue No and Law Abbreviation.
     """
-    type_to_extractor = {
+    extractor_by_type = {
         EntityType.ISSUE_NO: _ISSUE_NO_EXTRACTOR,
-        EntityType.LAW_ABBR: _ABBR_DEFINITION_EXTRACTOR,
+        EntityType.LAW_DYNAMIC_ABBR: _ABBR_DEFINITION_EXTRACTOR,
     }
 
     found_segments = _PAIRED_BRACKETS_EXTRACTOR.extract(text)
@@ -420,7 +418,7 @@ def _extract_bracketed_entities(text: str) -> Generator[Entity, Any, None]:
         offset = segment.start
         inner_text = segment.text
 
-        for entity_type, extractor in type_to_extractor.items():
+        for entity_type, extractor in extractor_by_type.items():
             for entity in extractor.extract(inner_text):
                 yield Entity(
                     text=entity.text,
@@ -431,7 +429,7 @@ def _extract_bracketed_entities(text: str) -> Generator[Entity, Any, None]:
 
 
 def _extract_keyword_entities(
-    text: str, abbr_entities: list[Entity]
+    text: str, dynamic_abbr_defs: list[Entity]
 ) -> Generator[Entity, Any, None]:
     """
     Extracts entities from the text based on provided keyword mappings.
@@ -440,9 +438,9 @@ def _extract_keyword_entities(
     # Build a reverse mapping from keyword to label
     keyword_to_type = {
         **{k: label for label, kws in _KEYWORD_MAPPING.items() for k in kws},
-        **{e.text: EntityType.LAW_ABBR.name for e in abbr_entities},
+        **{e.text: e.entity_type.name for e in dynamic_abbr_defs},
     }
-    abbr_to_entity = {entity.text: entity for entity in abbr_entities}
+    abbr_def_to_entity = {entity.text: entity for entity in dynamic_abbr_defs}
 
     extractor = KeywordExtractor(keywords=keyword_to_type.keys(), ignore_overlaps=True)
     found_segments = extractor.extract(text)
@@ -453,56 +451,15 @@ def _extract_keyword_entities(
         if type_ is None:
             raise ValueError(f"Unknown keyword: {segment.text}")
 
-        abbr_def = abbr_to_entity.get(segment.text)
-        if abbr_def and segment.start < abbr_def.start:
-            logger.debug(f"Ignored 'LAW_ABBR' before its definition:: {segment}")
-
         entity_type = EntityType.__members__.get(type_.upper())
         if entity_type is None:
             logger.debug(f"Ignored entity with unrecognized type '{type_}': {segment}")
             continue
 
-        yield Entity.of(segment, entity_type)
+        # dynamic abbreviation
+        abbr_def = abbr_def_to_entity.get(segment.text)
+        if abbr_def and segment.start < abbr_def.start:
+            logger.debug(f"Ignored '{segment}' before its definition: {abbr_def}")
+            continue
 
-
-def _validate_entities(
-    text: str, entities: Iterable[Entity]
-) -> Generator[Entity, Any, None]:
-    # Valid entity text is a valid XML fragment without unclosed tags
-    validations: tuple[Callable[[str, Entity], bool], ...] = (
-        _is_unmarked_hyperlink,
-        _is_valid_xml_fragment,
-    )
-    yield from (x for x in entities if all(v(text, x) for v in validations))
-
-
-def _is_valid_xml_fragment(document: str, segment: Segment) -> bool:
-    """
-    Check whether a text segment is a valid XML fragment.
-    """
-    text = text_util.unescape_html_entities(segment.text)
-
-    # inside attribute value(e.g., <tag attr="...">)
-    last_open = document.rfind("<", 0, segment.start)
-    last_close = document.rfind(">", 0, segment.start)
-    if last_open != -1 and last_close < last_open:
-        return False
-
-    # strict validation
-    try:
-        ET.fromstring(f"<root>{text}</root>")  # noqa: S314
-    except ET.ParseError:
-        return False
-
-    return True
-
-
-def _is_unmarked_hyperlink(document: str, segment: Segment) -> bool:
-    """
-    Check whether a text segment is already marked with an <a> tag.
-    """
-    last_open = document.rfind("<a", 0, segment.start)
-    if last_open == -1:
-        return True
-    last_close = document.rfind("</a>", 0, segment.start)
-    return last_close != -1 and last_close > last_open
+        yield Entity.of(segment, entity_type, refers_to=abbr_def)
