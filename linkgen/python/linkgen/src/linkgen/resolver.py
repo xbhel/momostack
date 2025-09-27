@@ -90,7 +90,7 @@ def _associate_ref_definitions(
         # forward lookup
         if (
             ref := end_index_lookup.floor(entity.start - 1)
-        ) and _is_not_sentence_ending(text, ref.end, entity.start):
+        ) and _without_sentence_ending(text, ref.end, entity.start):
             entity.refers_to = ref
 
 
@@ -111,7 +111,7 @@ def _associate_ref_defs_for_dynamic_abbr(
         abbr_def = abbr_ref.refers_to
         # forward lookup
         if (ref := end_index_lookup.floor(abbr_def.start - 1)) and (
-            _is_not_sentence_ending(text, ref.end, abbr_def.start)
+            _without_sentence_ending(text, ref.end, abbr_def.start)
             and _startswith_single_left_bracket(text, ref.end, abbr_def.start)
         ):
             abbr_ref.refers_to = ref
@@ -135,7 +135,7 @@ def _associate_attributes(
             entity = end_index_lookup.floor(attr.start - 1)
             if (
                 entity
-                and _is_not_sentence_ending(text, entity.end, attr.start)
+                and _without_sentence_ending(text, entity.end, attr.start)
                 and _startswith_single_left_bracket(text, entity.end, attr.start)
             ):
                 entity.attrs.append(attr)
@@ -144,7 +144,7 @@ def _associate_attributes(
 
         # backward lookup
         entity = start_index_lookup.ceiling(attr.end)
-        if entity and _is_not_sentence_ending(text, attr.end, entity.start):
+        if entity and _without_sentence_ending(text, attr.end, entity.start):
             entity.attrs.append(attr)
 
 
@@ -180,7 +180,7 @@ def _is_unmarked_hyperlink(document: str, segment: Entity) -> bool:
     return last_close != -1 and last_close > last_open
 
 
-def _is_not_sentence_ending(text: str, start: int, end: int) -> bool:
+def _without_sentence_ending(text: str, start: int, end: int) -> bool:
     """
     Check if the given range does not contain any sentence-ending character.
     """

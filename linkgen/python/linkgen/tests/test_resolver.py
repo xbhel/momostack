@@ -7,7 +7,7 @@ from linkgen.resolver import (
     _associate_attributes,
     _associate_ref_definitions,
     _associate_ref_defs_for_dynamic_abbr,
-    _is_not_sentence_ending,
+    _without_sentence_ending,
     _startswith_single_left_bracket,
     _skip_leading_whitespace,
     _skip_whitespace_and_tags,
@@ -172,22 +172,22 @@ class TestAssociateReferencesForDynamicAbbr(unittest.TestCase):
 class TestHelperFunctions(unittest.TestCase):
     """Test helper functions."""
 
-    def test_is_not_sentence_ending_no_ending(self):
-        """Test _is_not_sentence_ending with no sentence ending."""
+    def test_without_sentence_ending_no_ending(self):
+        """Test _without_sentence_ending with no sentence ending."""
         text = "This is a sentence"
-        result = _is_not_sentence_ending(text, 0, len(text))
+        result = _without_sentence_ending(text, 0, len(text))
         self.assertTrue(result)
 
-    def test_is_not_sentence_ending_with_ending(self):
-        """Test _is_not_sentence_ending with sentence ending."""
+    def test_without_sentence_ending_with_ending(self):
+        """Test _without_sentence_ending with sentence ending."""
         text = "This is a sentence!"
-        result = _is_not_sentence_ending(text, 0, len(text))
+        result = _without_sentence_ending(text, 0, len(text))
         self.assertFalse(result)
 
-    def test_is_not_sentence_ending_with_chinese_ending(self):
-        """Test _is_not_sentence_ending with Chinese sentence ending."""
+    def test_without_sentence_ending_with_chinese_ending(self):
+        """Test _without_sentence_ending with Chinese sentence ending."""
         text = "这是一个句子。"
-        result = _is_not_sentence_ending(text, 0, len(text))
+        result = _without_sentence_ending(text, 0, len(text))
         self.assertFalse(result)
 
     def test_startswith_single_left_bracket_valid(self):
