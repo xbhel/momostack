@@ -17,7 +17,6 @@ from linkgen.utils import io_util
 __author__ = "xbhel"
 __email__ = "xbhel@outlook.com"
 
-
 logger = logging.getLogger(__name__)
 logger.setLevel(os.getenv("LOG_LEVEL", logging.DEBUG))
 

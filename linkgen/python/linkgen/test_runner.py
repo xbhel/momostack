@@ -16,7 +16,7 @@ def test_runner_suite() -> Any:
     # commons_tests_sources = os.path.join(current_location, 'test_commons')
 
     # Region needed to run when using coverage.py so the imports are properly resolved.
-    source_root = os.path.join(current_location, 'src/linkgen')
+    source_root = os.path.join(current_location, 'src')
     sys.path.append(source_root)
 
     cov = coverage.Coverage(source=[source_root])

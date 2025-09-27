@@ -42,7 +42,7 @@ ignore = ["D001"]
 
 
 [tool.ruff]
-src = ["src/linkgen", "tests"]
+src = ["src", "tests"]
 fix = true
 line-length = 88
 show-fixes = true
@@ -125,7 +125,7 @@ pretty = true
 show_error_codes = true
 warn_unreachable = false
 no_implicit_reexport = true
-files = ["src/linkgen", "tests"]
+files = ["src", "tests"]
 exclude = "(?x)(/hooks/ | tests/test-output-folder/)"
 plugins = []
 
@@ -136,10 +136,10 @@ disable_error_code = ["no-untyped-def"]
 
 [tool.coverage.run]
 branch = true
-source = ["src/linkgen", "tests"]
+source = ["src", "tests"]
 
 [tool.coverage.paths]
-source = ["src/linkgen"]
+source = ["src"]
 
 [tool.coverage.report]
 exclude_also = ["if t.TYPE_CHECKING", "raise NotImplementedError", ": \\.{3}"]

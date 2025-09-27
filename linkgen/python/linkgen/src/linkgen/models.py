@@ -4,6 +4,9 @@ from dataclasses import dataclass, field
 from enum import StrEnum, auto, unique
 from typing import Self
 
+__author__ = "xbhel"
+__email__ = "xbhel@outlook.com"
+
 
 @unique
 class EntityType(StrEnum):

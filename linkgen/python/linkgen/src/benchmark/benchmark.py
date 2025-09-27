@@ -20,18 +20,19 @@ from typing import Any, Final
 
 import psutil
 
-from utils import io_util
+from linkgen.utils import io_util
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
 # Configuration constants
 DEFAULT_REPEAT: Final = 10
 DEFAULT_NUMBER: Final = 1
-SOURCE_FILE_DIR: Final = f"{io_util.WORKING_DIR}/../../../samples"
+WORKING_DIR = os.path.dirname(os.path.abspath(__file__))
+SOURCE_FILE_DIR: Final = f"{WORKING_DIR}/../../../../samples"
 
 
 @dataclass
@@ -91,7 +92,7 @@ def load_test_sources(source_dir: str = SOURCE_FILE_DIR) -> Iterable[tuple[str, 
             logger.info(f"Loading source: {path.name} ({filesize:,} bytes)")
 
             # Try different encodings to handle various file types
-            encodings = [None, 'utf-8']
+            encodings = [None, "utf-8"]
             text = None
 
             for encoding in encodings:
@@ -308,8 +309,8 @@ def main() -> None:
     if args.function:
         try:
             # Parse module.function format
-            if '.' in args.function:
-                module_path, func_name = args.function.rsplit('.', 1)
+            if "." in args.function:
+                module_path, func_name = args.function.rsplit(".", 1)
                 module = __import__(module_path, fromlist=[func_name])
                 func_to_benchmark = getattr(module, func_name)
             else:
@@ -323,9 +324,13 @@ def main() -> None:
             sys.exit(1)
 
     if func_to_benchmark is None:
-        from recognition.extractor import extract_entities
+        from linkgen.extractor import extract_entities
+        from linkgen.resolver import resolve_entities
 
-        func_to_benchmark = extract_entities
+        def f(text: str) -> Any:
+            return resolve_entities(text, extract_entities(text))
+
+        func_to_benchmark = f
 
     for text, _ in load_test_sources(args.sources):
         # Run benchmarks
