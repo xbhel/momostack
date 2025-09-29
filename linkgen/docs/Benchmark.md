@@ -14,15 +14,15 @@ Automatically extract potential references in legal documents and extract releva
 The Civil Code of the People's Republic of China.htm (688,933 bytes)
 
 TIMING STATISTICS:
-  Average: 0.014547 seconds
-  Median:  0.014594 seconds
-  Minimum: 0.013848 seconds
-  Maximum: 0.015219 seconds
-  Std Dev: 0.000450 seconds
+  Average: 0.204605 seconds
+  Median:  0.203886 seconds
+  Minimum: 0.195436 seconds
+  Maximum: 0.211556 seconds
+  Std Dev: 0.005061 seconds
 
 MEMORY USAGE:
-  RSS (Resident Set Size): 41.42 MB
-  VMS (Virtual Memory Size): 28.06 MB
+  RSS (Resident Set Size): 42.88 MB
+  VMS (Virtual Memory Size): 29.58 MB
 
 CPU USAGE:
   CPU Percentage: 0.00%
@@ -32,17 +32,60 @@ CPU USAGE:
 Source: The Civil Code of the People's Republic of China.xml (3,181,211 bytes)
 
 TIMING STATISTICS:
-  Average: 0.065786 seconds
-  Median:  0.064497 seconds
-  Minimum: 0.061637 seconds
-  Maximum: 0.072888 seconds
-  Std Dev: 0.003848 seconds
+  Average: 0.756844 seconds
+  Median:  0.742604 seconds
+  Minimum: 0.721399 seconds
+  Maximum: 0.861399 seconds
+  Std Dev: 0.039365 seconds
 
 MEMORY USAGE:
-  RSS (Resident Set Size): 45.73 MB
-  VMS (Virtual Memory Size): 32.35 MB
+  RSS (Resident Set Size): 47.27 MB
+  VMS (Virtual Memory Size): 33.84 MB
 
 CPU USAGE:
   CPU Percentage: 0.00%
 ```
 
+
+### Feature - Handle continuous case numbers and articles
+
+```
+The Civil Code of the People's Republic of China.htm (688,933 bytes)
+
+TIMING STATISTICS:
+  Average: 0.237035 seconds
+  Median:  0.236746 seconds
+  Minimum: 0.228226 seconds
+  Maximum: 0.249577 seconds
+  Std Dev: 0.007467 seconds
+
+MEMORY USAGE:
+  RSS (Resident Set Size): 46.14 MB
+  VMS (Virtual Memory Size): 32.66 MB
+
+CPU USAGE:
+  CPU Percentage: 0.00%
+```
+
+```
+Source: The Civil Code of the People's Republic of China.xml (3,181,211 bytes)
+
+TIMING STATISTICS:
+  Average: 0.857323 seconds
+  Median:  0.850761 seconds
+  Minimum: 0.808973 seconds
+  Maximum: 0.961474 seconds
+  Std Dev: 0.044131 seconds
+
+MEMORY USAGE:
+  RSS (Resident Set Size): 50.50 MB
+  VMS (Virtual Memory Size): 37.05 MB
+
+CPU USAGE:
+  CPU Percentage: 0.00%
+```
+
+Caused by:
+
+- [CaseNoExtractor](../python/linkgen/src/linkgen/extractor.py)
+- [LawArticleExtractor](../python/linkgen/src/linkgen/extractor.py)
