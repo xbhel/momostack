@@ -42,7 +42,35 @@ def reverse_dict[KT, VT](mapping: dict[KT, VT]) -> dict[VT, set[KT]]:
 
 
 def group_by[T, K](items: Iterable[T], key: Callable[[T], K]) -> dict[K, list[T]]:
+    if not items:
+        return {}
+
     mapping = defaultdict(list)
     for item in items:
         mapping[key(item)].append(item)
     return mapping
+
+
+def flatten[T](items_list: list[list[T]]) -> list[T]:
+    if not items_list:
+        return []
+
+    return [item for items in items_list for item in items]
+
+
+def remove_if[T, K](items: list[T], key: Callable[[T], K]) -> list[T]:
+    if not items:
+        return []
+
+    write_index = 0
+    removed: list[T] = []
+    for index in range(len(items)):
+        item = items[index]
+        if key(item):
+            removed.append(item)
+        else:
+            items[write_index] = item
+            write_index += 1
+
+    del items[write_index:]
+    return removed

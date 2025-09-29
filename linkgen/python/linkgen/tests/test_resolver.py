@@ -109,7 +109,7 @@ class TestAssociateReferences(unittest.TestCase):
         """Test basic reference association."""
         text = "Law Title Article 1"
         law_title = Entity("Law Title", 0, 9, EntityType.LAW_TITLE)
-        article = Entity("Article 1", 10, 19, EntityType.LAW_ARTICLE_NO)
+        article = Entity("Article 1", 10, 19, EntityType.LAW_ARTICLE)
 
         _associate_ref_definitions(text, [article], iter([law_title]))
 
@@ -119,7 +119,7 @@ class TestAssociateReferences(unittest.TestCase):
         """Test that no association occurs across sentence endings."""
         text = "Law Title. Article 1"
         law_title = Entity("Law Title", 0, 9, EntityType.LAW_TITLE)
-        article = Entity("Article 1", 11, 20, EntityType.LAW_ARTICLE_NO)
+        article = Entity("Article 1", 11, 20, EntityType.LAW_ARTICLE)
 
         _associate_ref_definitions(text, [article], iter([law_title]))
 
@@ -129,7 +129,7 @@ class TestAssociateReferences(unittest.TestCase):
     def test_no_reference_found(self):
         """Test when no reference is found."""
         text = "Article 1"
-        article = Entity("Article 1", 0, 9, EntityType.LAW_ARTICLE_NO)
+        article = Entity("Article 1", 0, 9, EntityType.LAW_ARTICLE)
 
         _associate_ref_definitions(text, [article], iter([]))
 

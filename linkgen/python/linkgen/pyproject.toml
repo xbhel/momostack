@@ -19,6 +19,7 @@ classifiers = [
 dependencies = [
     "pyahocorasick>=2.2.0,<3.0.0",
     "urllib3>=1.26.15,<3.0.0",
+    "cn2an==0.5.23",
 ]
 
 [dependency-groups]

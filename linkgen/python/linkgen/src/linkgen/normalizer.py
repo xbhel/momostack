@@ -116,8 +116,8 @@ class ChineseLawTitleNormalizer(Normalizer):
         Remove promulgator keywords and their associated descriptions
         enclosed in brackets from the text
         """
-        promulgators = self._promulgator_extractor.extract(text)
-        promulgators = sorted(promulgators, key=lambda x: x.start)
+        promulgators_it = self._promulgator_extractor.extract(text)
+        promulgators = sorted(promulgators_it, key=lambda x: x.start)
         if not promulgators:
             return text
 
