@@ -48,7 +48,7 @@ def _associate_entities(text: str, entities: list[Entity]) -> None:
         EntityType.LAW_TITLE: _associate_attributes,
         EntityType.LAW_SELF: _associate_ref_definitions,
         EntityType.THIS_LAW: _associate_ref_definitions,
-        EntityType.LAW_ARTICLE_NO: _associate_ref_definitions,
+        EntityType.LAW_ARTICLE: _associate_ref_definitions,
         EntityType.LAW_DYNAMIC_ABBR: _associate_ref_defs_for_dynamic_abbr,
     }
 

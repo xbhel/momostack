@@ -3,12 +3,13 @@ import os
 import re
 from abc import ABC, abstractmethod
 from collections import defaultdict, deque
-from collections.abc import Callable, Iterable, Iterator
+from collections.abc import Callable, Generator, Iterable, Iterator
 from typing import Literal, override
 
 import ahocorasick  # type: ignore  # noqa: PGH003
 
 from linkgen.models import Segment
+from linkgen.utils import coll_util
 
 __author__ = "xbhel"
 __email__ = "xbhel@outlook.com"
@@ -76,7 +77,7 @@ class PairedSymbolExtractor(Extractor):
         self._symbol_pattern = re.compile("|".join(re.escape(s) for s in symbol_pair))
 
     @override
-    def extract(self, text: str) -> Iterable[Segment]:
+    def extract(self, text: str) -> Iterator[Segment]:
         """Extract segments according to the configured nesting strategy."""
         yield from self._extract_func(text)
 
@@ -198,7 +199,7 @@ class KeywordExtractor(Extractor):
         self._max_keyword_length = len(max(self._automaton.keys(), key=len))
 
     @override
-    def extract(self, text: str) -> Iterable[Segment]:
+    def extract(self, text: str) -> Iterator[Segment]:
         """
         Extract all keyword matches from the input text.
         Args:
@@ -291,7 +292,7 @@ class ChainedExtractor(Extractor):
             raise ValueError("Must provide at least one extractor.")
         self._levels = [extractors]
 
-    def next(self, *extractors: Extractor) -> "ChainedExtractor":
+    def then(self, *extractors: Extractor) -> "ChainedExtractor":
         if not extractors:
             raise ValueError("Must provide at least one extractor.")
         # Create with first level extractors
@@ -300,21 +301,34 @@ class ChainedExtractor(Extractor):
         return new_extractor
 
     @override
-    def extract(self, text: str) -> list[Segment]:
-        segments = [Segment(text, 0, len(text))]
+    def extract(self, text: str) -> Iterator[Segment]:
+        segments = iter([Segment(text, 0, len(text))])
         for extractors in self._levels:
-            segments_list = self._process_level(segments, extractors)
-            segments = self._flatten(segments_list)
-        return segments
+            segments = self._process_level_lazy(segments, extractors)
+        yield from segments
 
     def extract_with_tuple_result(self, text: str) -> tuple[list[Segment], ...]:
         segments = [Segment(text, 0, len(text))]
 
         for level in range(len(self._levels) - 1):
             segments_list = self._process_level(segments, self._levels[level])
-            segments = self._flatten(segments_list)
+            segments = coll_util.flatten(segments_list)
 
         return tuple(self._process_level(segments, self._levels[-1]))
+
+    def _process_level_lazy(
+        self, segments: Iterator[Segment], extractors: tuple[Extractor, ...]
+    ) -> Generator[Segment, None, None]:
+        for segment in segments:
+            offset = segment.start
+            for extractor in extractors:
+                for extracted_segment in extractor.extract(segment.text):
+                    # Adjust positions relative to original text
+                    yield Segment(
+                        extracted_segment.text,
+                        extracted_segment.start + offset,
+                        extracted_segment.end + offset,
+                    )
 
     def _process_level(
         self, segments: list[Segment], extractors: tuple[Extractor, ...]
@@ -338,9 +352,6 @@ class ChainedExtractor(Extractor):
             result.append(next_segments)
 
         return result
-
-    def _flatten(self, segments_list: list[list[Segment]]) -> list[Segment]:
-        return [segment for segments in segments_list for segment in segments]
 
 
 def resolve_overlaps[T: Segment](

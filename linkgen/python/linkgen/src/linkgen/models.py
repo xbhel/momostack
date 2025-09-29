@@ -21,7 +21,7 @@ class EntityType(StrEnum):
     LAW_SELF = auto(), ("LAW_TITLE",)
     LAW_DYNAMIC_ABBR = auto(), ("LAW_TITLE",)
     LAW_TITLE = auto(), ("DATE", "ISSUE_NO", "PROMULGATOR")
-    LAW_ARTICLE_NO = (
+    LAW_ARTICLE = (
         auto(),
         ("LAW_TITLE", "LAW_DYNAMIC_ABBR", "LAW_ABBR", "THIS_LAW", "LAW_SELF"),
     )
@@ -59,6 +59,7 @@ class Entity(Segment):
     entity_type: EntityType
     attrs: list[Entity] = field(default_factory=list)
     refers_to: Entity | None = None
+    alias: str | None = None
 
     @classmethod
     def of(
@@ -67,6 +68,7 @@ class Entity(Segment):
         entity_type: EntityType,
         attrs: list[Entity] | None = None,
         refers_to: Entity | None = None,
+        alias: str | None = None
     ) -> Self:
         if attrs is None:
             attrs = []
@@ -77,4 +79,5 @@ class Entity(Segment):
             entity_type=entity_type,
             attrs=attrs,
             refers_to=refers_to,
+            alias=alias
         )

@@ -60,17 +60,41 @@ def unescape_html_entities(text: str, max_unescape_times: int = 3) -> str:
     return text
 
 
-def strip_equivalent_symbols(
+def strip_equivalents(
     text: str, symbol: str, variants: Iterable[str] | None = None
 ) -> str:
-    equivalents = {symbol}
+    equivalents = get_equivalents(symbol)
     if variants:
         equivalents.update(variants)
+    return text.strip("".join(equivalents))
 
+
+def get_equivalents(symbol: str) -> set[str]:
+    equivalents = {symbol}
     if symbols := _ASCII_TO_VARIANTS.get(symbol):
         equivalents.update(symbols)
+    return equivalents
 
-    return text.strip("".join(equivalents))
+
+def split_by_equivalents(text: str, delimiter: str) -> list[str]:
+    equivalents = get_equivalents(delimiter)
+    trans_table = {ord(x): delimiter for x in equivalents}
+    text = text.translate(trans_table)
+    return text.split(delimiter)
+
+
+def has_any_equivalents(
+    text: str, symbol: str, start: int = 0, end: int | None = None
+) -> int:
+    if end is None:
+        end = len(text)
+    if start > end:
+        return False
+    for s in get_equivalents(symbol):
+        index = text.find(s, start, end)
+        if index != -1:
+            return True
+    return False
 
 
 def is_whitespace(s: str) -> bool:
@@ -79,7 +103,11 @@ def is_whitespace(s: str) -> bool:
     return s in _ASCII_TO_VARIANTS.get(" ", {})
 
 
-def is_balanced_symbols(
+def is_digit(s: str) -> bool:
+    return s.isdigit()
+
+
+def is_symbol_balanced(
     text: str,
     pair: tuple[str, str],
     start: int = 0,
@@ -118,3 +146,51 @@ def is_balanced_symbols(
             stack.pop()
 
     return not stack
+
+
+def adjust_start_end(
+    length: int, start: int, end: int | None = None
+) -> tuple[int, int]:
+    """
+    equivalent:
+        adjust_start_end(10, -1, -10) = slice(-1, -10, -1).indices(10) = (9, 0)
+        adjust_start_end(10, 0, 10) = slice(1, 10, 1).indices(10) = (0, 10)
+    """
+    if end is None:
+        end = length
+    elif end < 0:
+        end = end + length
+    else:
+        end = min(end, length)
+
+    if start < 0:
+        start = length + start
+
+    return start, end
+
+
+def is_numeric(s: str) -> bool:
+    return s.isdigit()
+
+
+def find_last_numeric_suffix(
+    text: str, start: int = 0, end: int | None = None
+) -> tuple[str, int]:
+    start, end = adjust_start_end(len(text), start, end)
+
+    if start >= end:
+        return "", -1
+
+    idx = end - 1
+    num_chars: list[str] = []
+    while idx >= start:
+        c = text[idx]
+        if not is_numeric(c) and num_chars:
+            break
+        num_chars.append(c)
+        idx -= 1
+
+    if not num_chars:
+        return "", -1
+
+    return "".join(reversed(num_chars)), idx + 1

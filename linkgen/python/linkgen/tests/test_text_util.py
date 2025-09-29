@@ -2,11 +2,11 @@ import unittest
 
 from linkgen.utils.text_util import (
     fullwidth_to_halfwidth,
-    is_balanced_symbols,
+    is_symbol_balanced,
     remove_all_whitespaces,
     to_ascii,
     unescape_html_entities,
-    strip_equivalent_symbols,
+    strip_equivalents,
 )
 
 
@@ -27,29 +27,29 @@ class TestTextUtil(unittest.TestCase):
             unescape_html_entities("&amp;amp;", max_unescape_times=1), "&amp;"
         )
 
-    def test_strip_equivalent_symbols_uses_variants_table(self) -> None:
+    def test_strip_equivalents_uses_variants_table(self) -> None:
         # Should strip ASCII quotes and their typographic variants
         text = "“Hello”"
-        self.assertEqual(strip_equivalent_symbols(text, '"'), "Hello")
+        self.assertEqual(strip_equivalents(text, '"'), "Hello")
 
     def test_is_balanced_symbols_simple_parentheses(self) -> None:
-        self.assertTrue(is_balanced_symbols("(a(b)c)", ("(", ")")))
-        self.assertTrue(is_balanced_symbols("<p><q>xxx</p></q>", ("<", ">")))
-        self.assertFalse(is_balanced_symbols("(a(b)c", ("(", ")")))
+        self.assertTrue(is_symbol_balanced("(a(b)c)", ("(", ")")))
+        self.assertTrue(is_symbol_balanced("<p><q>xxx</p></q>", ("<", ">")))
+        self.assertFalse(is_symbol_balanced("(a(b)c", ("(", ")")))
 
     def test_is_balanced_symbols_custom_tokens(self) -> None:
-        self.assertTrue(is_balanced_symbols("<<a<<b>>c>>", ("<<", ">>")))
-        self.assertFalse(is_balanced_symbols("<<a<<b>>", ("<<", ">>")))
+        self.assertTrue(is_symbol_balanced("<<a<<b>>c>>", ("<<", ">>")))
+        self.assertFalse(is_symbol_balanced("<<a<<b>>", ("<<", ">>")))
 
     def test_is_balanced_symbols_quotes_identical_left_right(self) -> None:
-        self.assertTrue(is_balanced_symbols('"a "b" c"', ('"', '"')))
-        self.assertFalse(is_balanced_symbols('"a "b c"', ('"', '"')))
+        self.assertTrue(is_symbol_balanced('"a "b" c"', ('"', '"')))
+        self.assertFalse(is_symbol_balanced('"a "b c"', ('"', '"')))
 
     def test_is_balanced_symbols_slice_bounds_and_empty(self) -> None:
         s = "(ab)(cd)"
-        self.assertTrue(is_balanced_symbols(s, ("(", ")"), start=0, end=4))  # (ab)
+        self.assertTrue(is_symbol_balanced(s, ("(", ")"), start=0, end=4))  # (ab)
         self.assertTrue(
-            is_balanced_symbols(s, ("(", ")"), start=2, end=2)
+            is_symbol_balanced(s, ("(", ")"), start=2, end=2)
         )  # empty selection
 
 
