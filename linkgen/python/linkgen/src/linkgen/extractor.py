@@ -31,12 +31,14 @@ class CaseNoExtractor(Extractor):
     - "(2025)沪0101刑初第682号"
     - "(2025)沪0101刑初第682号、第683号"
     - "(2025)沪0101刑初第682、683号"
+    - "(2025)沪0101刑初682、683号"
 
     When multiple case numbers are listed with shared non-numeric prefixes
     (e.g., "第" and other fixed parts), the first item is treated as the
     full reference and the subsequent items inherit the same prefix so that
     each yielded entity contains a complete case number string.
     """
+
     _extractor = PatternExtractor(patterns["case_no"])
 
     @override
@@ -170,6 +172,74 @@ class LawArticleExtractor(Extractor):
             return None
 
 
+class DynamicKeywordEntityExtractor(Extractor):
+    """Extract entities based on keyword mappings, including dynamic entries.
+
+    Uses a keyword→type lookup built from a static resource and optionally
+    extended by dynamic abbreviation definitions discovered earlier in the
+    text. Dynamic entries map the keyword directly to the defining `Entity`.
+    """
+
+    _KEYWORD_MAPPING: Final = io_util.load_resource_json("KeywordMapping.json")
+
+    _default_keyword_lookup = {
+        k: type_ for type_, kws in _KEYWORD_MAPPING.items() for k in kws
+    }
+    _default_extractor = KeywordExtractor(
+        keywords=_default_keyword_lookup.keys(), ignore_overlaps=True
+    )
+
+    def __init__(self, dynamic_abbr_defs: list[Entity]) -> None:
+        self._extractor = self._default_extractor
+        self._keyword_lookup: dict[str, Any] = self._default_keyword_lookup
+        if dynamic_abbr_defs:
+            self._rebuild_lookup_and_extractor(dynamic_abbr_defs)
+
+    @override
+    def extract(self, text: str) -> Iterator[Entity]:
+        """Extract entities by matching keywords and mapping them to types.
+
+        Dynamic abbreviations are validated to ensure their match appears
+        after the definition.
+        """
+        found_segments = self._extractor.extract(text)
+        for segment in found_segments:
+            value = self._keyword_lookup.get(segment.text)
+
+            if value is None:
+                logger.debug("Ignored keyword with no mapping: %r", segment)
+                continue
+
+            # dynamic abbreviation
+            entity_type = None
+            abbr_def = None
+            if isinstance(value, Entity):
+                if segment.start < value.start:
+                    logger.debug("Ignored LAW_ABBR before its definition: %r", segment)
+                    continue
+                abbr_def = value
+                entity_type = value.entity_type
+            else:
+                entity_type = EntityType.__members__.get(value.upper())
+                if entity_type is None:
+                    logger.debug(
+                        "Ignored unrecognized entity type %r for %r", value, segment
+                    )
+                    continue
+
+            yield Entity.of(segment, entity_type, refers_to=abbr_def)
+
+    def _rebuild_lookup_and_extractor(self, dynamic_abbr_defs: list[Entity]) -> None:
+        # Build a reverse mapping from keyword to label/entity
+        self._keyword_lookup = {
+            **self._default_keyword_lookup,
+            **{e.text: e for e in dynamic_abbr_defs},
+        }
+        self._extractor = KeywordExtractor(
+            keywords=self._keyword_lookup.keys(), ignore_overlaps=True
+        )
+
+
 class PatternEntityExtractor(Extractor):
     """Extract entities via simple, stateless pattern extractors.
 
@@ -225,7 +295,6 @@ class BracketEntityExtractor(Extractor):
     def extract(self, text: str) -> Iterator[Entity]:
         """Extract entities from inner content of bracketed segments."""
         found_segments = self._brackets_extractor.extract(text)
-
         for segment in found_segments:
             offset = segment.start
             inner_text = segment.text
@@ -238,77 +307,6 @@ class BracketEntityExtractor(Extractor):
                         end=entity.end + offset,
                         entity_type=entity_type,
                     )
-
-
-class DynamicKeywordEntityExtractor(Extractor):
-    """Extract entities based on keyword mappings, including dynamic entries.
-
-    Uses a keyword→type lookup built from a static resource and optionally
-    extended by dynamic abbreviation definitions discovered earlier in the
-    text. Dynamic entries map the keyword directly to the defining `Entity`.
-    """
-
-    _KEYWORD_MAPPING: Final = io_util.load_resource_json("KeywordMapping.json")
-
-    _default_keyword_lookup = {
-        k: type_ for type_, kws in _KEYWORD_MAPPING.items() for k in kws
-    }
-    _default_extractor = KeywordExtractor(
-        keywords=_default_keyword_lookup.keys(), ignore_overlaps=True
-    )
-
-    def __init__(self, dynamic_abbr_defs: list[Entity]) -> None:
-        self._extractor = self._default_extractor
-        self._keyword_lookup: dict[str, Any] = self._default_keyword_lookup
-        if dynamic_abbr_defs:
-            self._rebuild_lookup_and_extractor(dynamic_abbr_defs)
-
-    @override
-    def extract(self, text: str) -> Iterator[Entity]:
-        """Extract entities by matching keywords and mapping them to types.
-
-        Dynamic abbreviations are validated to ensure their match appears
-        after the definition.
-        """
-        found_segments = self._extractor.extract(text)
-        for segment in found_segments:
-            entity_type = None
-            abbr_def = None
-            value = self._keyword_lookup.get(segment.text)
-            if value is None:
-                logger.debug(
-                    "Ignored keyword with no mapping: %r",
-                    segment.text,
-                )
-                continue
-            # dynamic abbreviation
-            if isinstance(value, Entity):
-                if segment.start < value.start:
-                    logger.debug("Ignored LAW_ABBR before its definition: %r", segment)
-                    continue
-                abbr_def = value
-                entity_type = value.entity_type
-            else:
-                entity_type = EntityType.__members__.get(value.upper())
-                if entity_type is None:
-                    logger.debug(
-                        "Ignored unrecognized entity type %r for %r",
-                        value,
-                        segment,
-                    )
-                    continue
-
-            yield Entity.of(segment, entity_type, refers_to=abbr_def)
-
-    def _rebuild_lookup_and_extractor(self, dynamic_abbr_defs: list[Entity]) -> None:
-        # Build a reverse mapping from keyword to label/entity
-        self._keyword_lookup = {
-            **self._default_keyword_lookup,
-            **{e.text: e for e in dynamic_abbr_defs},
-        }
-        self._extractor = KeywordExtractor(
-            keywords=self._keyword_lookup.keys(), ignore_overlaps=True
-        )
 
 
 # Global extractors
