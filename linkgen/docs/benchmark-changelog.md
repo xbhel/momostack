@@ -1,6 +1,6 @@
 # Benchmark
 
-Benchmarking module [benchmark.py](../python/src/benchmark/benchmark.py) for hyperlink recognition performance testing.
+Benchmarking module [benchmark.py](../python/linkgen/src/benchmark/benchmark.py) for hyperlink recognition performance testing.
 
 This module provides comprehensive benchmarking capabilities for measuring
 the performance of text processing functions, including timing, memory usage,
@@ -85,7 +85,49 @@ CPU USAGE:
   CPU Percentage: 0.00%
 ```
 
-Caused by:
+Related to:
 
 - [CaseNoExtractor](../python/linkgen/src/linkgen/extractor.py)
 - [LawArticleExtractor](../python/linkgen/src/linkgen/extractor.py)
+
+
+### Feature - Update regex for case numbers and articles
+
+```
+The Civil Code of the People's Republic of China.htm (688,933 bytes)
+
+TIMING STATISTICS:
+  Average: 0.188554 seconds
+  Median:  0.189565 seconds
+  Minimum: 0.179436 seconds
+  Maximum: 0.196664 seconds
+  Std Dev: 0.006029 seconds
+
+MEMORY USAGE:
+  RSS (Resident Set Size): 45.49 MB
+  VMS (Virtual Memory Size): 32.02 MB
+
+CPU USAGE:
+  CPU Percentage: 0.00%
+```
+
+```
+Source: The Civil Code of the People's Republic of China.xml (3,181,211 bytes)
+
+TIMING STATISTICS:
+  Average: 0.729557 seconds
+  Median:  0.721545 seconds
+  Minimum: 0.680572 seconds
+  Maximum: 0.819960 seconds
+  Std Dev: 0.039173 seconds
+
+MEMORY USAGE:
+  RSS (Resident Set Size): 49.80 MB
+  VMS (Virtual Memory Size): 36.31 MB
+
+CPU USAGE:
+```
+
+Related to:
+
+- [PatternMapping](../python/linkgen/src/linkgen/resources/PatternMapping.json)

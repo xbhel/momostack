@@ -324,11 +324,9 @@ class ChainedExtractor(Extractor):
             for extractor in extractors:
                 for extracted_segment in extractor.extract(segment.text):
                     # Adjust positions relative to original text
-                    yield Segment(
-                        extracted_segment.text,
-                        extracted_segment.start + offset,
-                        extracted_segment.end + offset,
-                    )
+                    extracted_segment.start += offset
+                    extracted_segment.end += offset
+                    yield extracted_segment
 
     def _process_level(
         self, segments: list[Segment], extractors: tuple[Extractor, ...]
@@ -342,12 +340,9 @@ class ChainedExtractor(Extractor):
                 offset = segment.start
                 for extracted_segment in extractor.extract(segment.text):
                     # Adjust positions relative to original text
-                    adjusted_segment = Segment(
-                        extracted_segment.text,
-                        extracted_segment.start + offset,
-                        extracted_segment.end + offset,
-                    )
-                    next_segments.append(adjusted_segment)
+                    extracted_segment.start += offset
+                    extracted_segment.end += offset
+                    next_segments.append(extracted_segment)
 
             result.append(next_segments)
 
