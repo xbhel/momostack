@@ -31,6 +31,13 @@ def remove_all_whitespaces(text: str) -> str:
     return _WHITESPACE_REGEX.sub("", text)
 
 
+def replace_all_whitespaces(text: str, replacement: str) -> str:
+    """
+    Replace all Unicode whitespace characters with the given replacement string.
+    """
+    return _WHITESPACE_REGEX.sub(replacement, text)
+
+
 def fullwidth_to_halfwidth(text: str) -> str:
     """
     Convert full-width ASCII forms (FF01-FF5E) to half-width equivalents, and

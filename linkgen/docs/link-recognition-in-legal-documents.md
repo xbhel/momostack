@@ -673,3 +673,242 @@ Two valid forms are recognized as nested titles:
 - D and E required; A, B, C optional
 
 In both cases, the normalization process extracts Part D (Law Title) and then applies the same non-nested normalization rules to derive the core term.
+
+
+## Validation based on Multi-Dimensional Inverted Index
+
+### Core Steps
+
+1. **Title Normalization**  
+   - Clean text, trim spaces, standardize punctuation (e.g., unify Chinese/English brackets, quotes).  
+
+2. **Tokenization**  
+   - Split Title into **Prefixes**, **Core Term**, and **Suffixes**.  
+
+3. **Candidate Retrieval**  
+   - Query database by Core Term to retrieve candidate documents.  
+   - Apply the same tokenization to candidates’ Titles.  
+
+4. **Multi-Dimensional Inverted Index**  
+   The index includes the following dimensions:  
+   - Prefixes  
+   - Suffixes  
+   - Release Date (attribute)  
+   - Promulgators (attribute)  
+   - Issue Number (attribute)  
+
+5. **Cross-Matching and Validation**  
+   - Query inverted index using tokens and extracted attributes.  
+   - Take the intersection of search results across dimensions as the candidate set.  
+   - If exactly one document remains → unique match.  
+   - If multiple documents remain → rank by weight (e.g., release date, promulgator) and select the top.  
+
+### Enhancements
+- **Fuzzy Matching**: Allow approximate matches (edit distance, spelling variants).  
+- **Weighting Strategy**: Configurable ranking priority (e.g., Release Date > Issue Number > Prefixes).  
+- **Error Feedback**: Provide diagnostic info when validation fails (missing doc, ambiguous matches).  
+- **Performance Optimization**: Support batch index building and incremental updates.  
+
+
+### Tokenization
+
+#### Common Prefixes
+
+- **中华人民共和国**民法典(2020年)
+- **中华人民共和国**民法典(1996年)
+- **中华人民共和国**民法典
+  
+```json
+[
+    {
+        "core": "民法典",
+        "prefixes": [
+            {
+                "start": 0,
+                "end": 6,
+                "text": "中华人民共和国",
+            }
+        ], 
+        "suffixes": [
+            {
+                "start": 10,
+                "end": 17,
+                "text": "(2020年)",
+            }, 
+        ]
+    },
+    {
+        "core": "民法典",
+        "prefixes": [
+            {
+                "start": 0,
+                "end": 6,
+                "text": "中华人民共和国",
+            }
+        ], 
+        "suffixes": [
+            {
+                "start": 10,
+                "end": 17,
+                "text": "(1996年)",
+            }, 
+        ]
+    },
+    {
+        "core": "民法典",
+        "prefixes": [
+            {
+                "start": 0,
+                "end": 6,
+                "text": "中华人民共和国",
+            }
+        ], 
+        "suffixes": []
+    }
+]
+```
+
+- 民法典
+  - PrefixInvertedIndex.search("中华人民共和国")
+    - All
+- 民法典(2020年)
+  - PrefixInvertedIndex.search("中华人民共和国")
+    - All
+      - SuffixInvertedIndex.search("(2020年)")
+        - 0
+  - len(result) == 1
+    - result => 0
+- 民法典(xxx)
+  - PrefixInvertedIndex.search("中华人民共和国")
+    - All
+      - SuffixInvertedIndex.search("(xxx)")
+        - None
+      - allow fallback? 
+        - Y -> previous -> All -> attribute Search
+        - N -> None
+
+- 中华人民共和国民法典
+- 中华人民共和国民法典(xxx)
+- 中华人民共和国民法典(2020年)
+
+
+
+允许省略常见前缀 like `中华人民共和国`。
+
+#### Prefixes - Promulgators 
+
+- **上海市场监管局**发布市场监管章程
+- **深圳市场监管局**发布市场监管章程
+- **商业部**、**市场监管局**发布市场监管章程
+```json
+[
+    {
+        "core": "发布市场监管章程",
+        "prefixes": [
+            {
+                "start": 0,
+                "end": 7,
+                "text": "上海市场监管局",
+            }
+        ], 
+        "suffixes": []
+    }
+    {
+        "core": "发布市场监管章程",
+        "prefixes": [
+            {
+                "start": 0,
+                "end": 7,
+                "text": "深圳市场监管局",
+            }
+        ], 
+        "suffixes": []
+    }
+    {
+        "core": "发布市场监管章程",
+        "prefixes": [
+            {
+                "start": 0,
+                "end": 3,
+                "text": "商业部",
+            },
+            {
+                "start": 4,
+                "end": 9,
+                "text": "市场监管局",
+            }
+        ], 
+        "suffixes": []
+    }
+]
+```
+
+- 发布市场监管章程 -> None
+- 上海市场监管局发布市场监管章程 -> 0
+
+
+#### Nested Structures
+
+- **中华人民共和国**民法典(2020年)
+- **中华人民共和国**民法典(1996年)
+- **中华人民共和国**民法典
+- 国务院关于发布《**中华人民共和国**民法典(2020年)》的通知
+- 国务院关于发布《**中华人民共和国**民法典(1996年)》的通知
+- 国务院关于发布《**中华人民共和国**民法典》的通知
+
+
+1. 嵌套的只能匹配嵌套的
+2. 非嵌套的应用前缀后缀过滤之后：
+   1. 非嵌套的优先匹配非嵌套的
+   2. 如果不存在非嵌套的才匹配嵌套的。
+
+- 必须匹配一个前缀
+- 匹配 0...n 个后缀
+
+
+- 允许丢失公共前缀
+
+```json
+
+// 民法典(2020年)
+// 中华人民共和国民法典
+// 中华人民共和国民法典(2020年)
+// 中华人民共和国民法典(xxx)
+
+// 中华人民共和国民法典(2020年)
+{
+    "core": "民法典",
+    "prefixes": [
+        {
+            "start": 0,
+            "end": 6,
+            "text": "中华人民共和国",
+        }
+    ], 
+    "suffixes": [
+        {
+            "start": 20,
+            "end": 23,
+            "text": "(2020年)",
+        }, 
+    ]
+}
+
+//1. 民法典 -> missing prefix(如是公共的前缀是允许的，如中华人民共和国)
+// 关于解读《中华人民共和国民法典(2020年)》
+// 章程
+// 中华人民共和国章程
+// 深圳市场监管局章程
+{
+    "core": "章程",
+    "prefixes": [
+        {
+            "start": 0,
+            "end": 7,
+            "text": "深圳市场监管局"
+        }
+    ],
+    "suffixes": []
+}
+```
+

@@ -3,7 +3,7 @@ import re
 from typing import Iterable
 import unittest
 
-from linkgen.models import Segment
+from linkgen.models import Token
 from linkgen.helper import (
     resolve_overlaps,
     ChainedExtractor,
@@ -15,7 +15,7 @@ from linkgen.helper import (
 from linkgen.utils import coll_util
 
 
-def to_simple(spans: Iterable[Segment]) -> list[tuple[str, int, int]]:
+def to_simple(spans: Iterable[Token]) -> list[tuple[str, int, int]]:
     return [(s.text, s.start, s.end) for s in spans]
 
 
@@ -879,12 +879,12 @@ class TestChainedExtractor(unittest.TestCase):
         """Test the internal _flatten method."""
         # Create test data
         segments_list = [
-            [Segment("法律", 0, 2), Segment("法规", 3, 5)],
-            [Segment("条款", 6, 8)],
+            [Token("法律", 0, 2), Token("法规", 3, 5)],
+            [Token("条款", 6, 8)],
         ]
 
         flattened = coll_util.flatten(segments_list)
-        expected = [Segment("法律", 0, 2), Segment("法规", 3, 5), Segment("条款", 6, 8)]
+        expected = [Token("法律", 0, 2), Token("法规", 3, 5), Token("条款", 6, 8)]
 
         self.assertEqual(len(flattened), 3)
         self.assertEqual(to_simple(flattened), to_simple(expected))
@@ -899,34 +899,34 @@ class TestResolveOverlaps(unittest.TestCase):
 
     def test_single_segment(self) -> None:
         """Test that single segment is returned unchanged."""
-        segment = Segment("test", 0, 5)
+        segment = Token("test", 0, 5)
         result = resolve_overlaps([segment], "longest")
         self.assertEqual(result, [segment])
 
     def test_no_overlaps(self) -> None:
         """Test segments with no overlaps are all returned."""
         segments = [
-            Segment("a", 0, 3),
-            Segment("b", 5, 8),
-            Segment("c", 10, 13),
+            Token("a", 0, 3),
+            Token("b", 5, 8),
+            Token("c", 10, 13),
         ]
         result = resolve_overlaps(segments, "longest")
         self.assertEqual(to_simple(result), [("a", 0, 3), ("b", 5, 8), ("c", 10, 13)])
 
     def test_invalid_strategy_raises_error(self) -> None:
         """Test that invalid strategy raises appropriate error."""
-        segments = [Segment("test", 0, 5)]
+        segments = [Token("test", 0, 5)]
         with self.assertRaises(UnboundLocalError):
             resolve_overlaps(segments, "invalid_strategy")  # type: ignore
 
     def test_mixed_overlap_patterns(self) -> None:
         """Test complex patterns with mixed overlaps."""
         segments = [
-            Segment("a", 0, 5),
-            Segment("b", 3, 8),
-            Segment("c", 7, 12),
-            Segment("d", 10, 15),
-            Segment("e", 20, 25),
+            Token("a", 0, 5),
+            Token("b", 3, 8),
+            Token("c", 7, 12),
+            Token("d", 10, 15),
+            Token("e", 20, 25),
         ]
         result = resolve_overlaps(segments, "longest")
         # First group (a,b,c,d) overlaps, keep longest (a has length 5)
@@ -936,11 +936,11 @@ class TestResolveOverlaps(unittest.TestCase):
     def test_mixed_overlap_patterns_earliest(self) -> None:
         """Test complex patterns with earliest strategy."""
         segments = [
-            Segment("a", 0, 5),
-            Segment("b", 3, 8),
-            Segment("c", 7, 12),
-            Segment("d", 10, 15),
-            Segment("e", 20, 25),
+            Token("a", 0, 5),
+            Token("b", 3, 8),
+            Token("c", 7, 12),
+            Token("d", 10, 15),
+            Token("e", 20, 25),
         ]
         result = resolve_overlaps(segments, "earliest")
         # Should keep earliest non-overlapping segments
@@ -949,11 +949,11 @@ class TestResolveOverlaps(unittest.TestCase):
     def test_unsorted_complex_input(self) -> None:
         """Test that complex unsorted input is handled correctly."""
         segments = [
-            Segment("e", 20, 25),
-            Segment("a", 0, 5),
-            Segment("c", 7, 12),
-            Segment("b", 3, 8),
-            Segment("d", 10, 15),
+            Token("e", 20, 25),
+            Token("a", 0, 5),
+            Token("c", 7, 12),
+            Token("b", 3, 8),
+            Token("d", 10, 15),
         ]
         result = resolve_overlaps(segments, "longest")
         # Should sort by start position and then apply longest strategy
@@ -964,8 +964,8 @@ class TestResolveOverlaps(unittest.TestCase):
     def test_zero_length_segments(self) -> None:
         """Test segments with zero length."""
         segments = [
-            Segment("a", 0, 0),
-            Segment("b", 0, 5),
+            Token("a", 0, 0),
+            Token("b", 0, 5),
         ]
         result = resolve_overlaps(segments, "longest")
         # Zero-length segment at position 0 does not overlap with (0,5)
@@ -976,8 +976,8 @@ class TestResolveOverlaps(unittest.TestCase):
     def test_negative_positions(self) -> None:
         """Test segments with negative positions."""
         segments = [
-            Segment("a", -5, -2),
-            Segment("b", -3, 0),
+            Token("a", -5, -2),
+            Token("b", -3, 0),
         ]
         result = resolve_overlaps(segments, "longest")
         # Should handle negative positions correctly
@@ -987,8 +987,8 @@ class TestResolveOverlaps(unittest.TestCase):
     def test_very_large_positions(self) -> None:
         """Test segments with very large positions."""
         segments = [
-            Segment("a", 1000000, 1000005),
-            Segment("b", 1000003, 1000008),
+            Token("a", 1000000, 1000005),
+            Token("b", 1000003, 1000008),
         ]
         result = resolve_overlaps(segments, "longest")
         # Should handle large numbers correctly
@@ -998,8 +998,8 @@ class TestResolveOverlaps(unittest.TestCase):
     def test_identical_segments(self) -> None:
         """Test identical segments."""
         segments = [
-            Segment("a", 0, 5),
-            Segment("a", 0, 5),
+            Token("a", 0, 5),
+            Token("a", 0, 5),
         ]
         result = resolve_overlaps(segments, "longest")
         # Identical segments should be deduplicated to one segment
@@ -1008,8 +1008,8 @@ class TestResolveOverlaps(unittest.TestCase):
     def test_contained_segments(self) -> None:
         """Test one segment completely contained within another."""
         segments = [
-            Segment("outer", 0, 10),
-            Segment("inner", 3, 7),
+            Token("outer", 0, 10),
+            Token("inner", 3, 7),
         ]
         result = resolve_overlaps(segments, "longest")
         # Should keep the longer (outer) segment
@@ -1018,8 +1018,8 @@ class TestResolveOverlaps(unittest.TestCase):
     def test_contained_segments_earliest_strategy(self) -> None:
         """Test contained segments with earliest strategy."""
         segments = [
-            Segment("outer", 0, 10),
-            Segment("inner", 3, 7),
+            Token("outer", 0, 10),
+            Token("inner", 3, 7),
         ]
         result = resolve_overlaps(segments, "earliest")
         # Should keep only the first (earliest) segment
@@ -1032,8 +1032,8 @@ class TestLongestStrategy(unittest.TestCase):
     def test_longest_basic_overlap(self) -> None:
         """Test basic overlap resolution keeping longest segment."""
         segments = [
-            Segment("short", 0, 3),
-            Segment("longer", 2, 8),
+            Token("short", 0, 3),
+            Token("longer", 2, 8),
         ]
         result = resolve_overlaps(segments, "longest")
         self.assertEqual(to_simple(result), [("longer", 2, 8)])
@@ -1041,9 +1041,9 @@ class TestLongestStrategy(unittest.TestCase):
     def test_longest_multiple_overlaps(self) -> None:
         """Test multiple overlapping segments keeping longest."""
         segments = [
-            Segment("a", 0, 5),
-            Segment("b", 4, 7),
-            Segment("c", 6, 10),
+            Token("a", 0, 5),
+            Token("b", 4, 7),
+            Token("c", 6, 10),
         ]
         result = resolve_overlaps(segments, "longest")
         # All segments overlap in a chain, keep the longest one (a has length 5)
@@ -1052,10 +1052,10 @@ class TestLongestStrategy(unittest.TestCase):
     def test_longest_chain_overlaps(self) -> None:
         """Test chained overlaps with longest strategy."""
         segments = [
-            Segment("a", 0, 3),
-            Segment("b", 2, 5),
-            Segment("c", 4, 7),
-            Segment("d", 6, 9),
+            Token("a", 0, 3),
+            Token("b", 2, 5),
+            Token("c", 4, 7),
+            Token("d", 6, 9),
         ]
         result = resolve_overlaps(segments, "longest")
         # All segments overlap in a chain, keep the longest one (all have length 3, so keep first)
@@ -1064,9 +1064,9 @@ class TestLongestStrategy(unittest.TestCase):
     def test_longest_direct_only_true(self) -> None:
         """Test longest strategy with direct_only=True."""
         segments = [
-            Segment("a", 0, 5),
-            Segment("b", 4, 7),
-            Segment("c", 6, 10),
+            Token("a", 0, 5),
+            Token("b", 4, 7),
+            Token("c", 6, 10),
         ]
         result = resolve_overlaps(segments, "longest", direct_only=True)
         # Only direct overlaps considered: (a,b) and (b,c) separately
@@ -1077,9 +1077,9 @@ class TestLongestStrategy(unittest.TestCase):
     def test_longest_direct_only_false(self) -> None:
         """Test longest strategy with direct_only=False (default)."""
         segments = [
-            Segment("a", 0, 5),
-            Segment("b", 4, 7),
-            Segment("c", 6, 10),
+            Token("a", 0, 5),
+            Token("b", 4, 7),
+            Token("c", 6, 10),
         ]
         result = resolve_overlaps(segments, "longest", direct_only=False)
         # All segments form one overlapping chain, keep the longest (a has length 5)
@@ -1088,8 +1088,8 @@ class TestLongestStrategy(unittest.TestCase):
     def test_longest_tie_breaking(self) -> None:
         """Test longest strategy when segments have same length."""
         segments = [
-            Segment("a", 0, 3),
-            Segment("b", 2, 5),
+            Token("a", 0, 3),
+            Token("b", 2, 5),
         ]
         result = resolve_overlaps(segments, "longest")
         # Both have same length, should keep the first one (earliest start)
@@ -1098,9 +1098,9 @@ class TestLongestStrategy(unittest.TestCase):
     def test_longest_unsorted_input(self) -> None:
         """Test that input is properly sorted before processing."""
         segments = [
-            Segment("c", 6, 10),
-            Segment("a", 0, 5),
-            Segment("b", 4, 7),
+            Token("c", 6, 10),
+            Token("a", 0, 5),
+            Token("b", 4, 7),
         ]
         result = resolve_overlaps(segments, "longest")
         # Should be sorted by start position first, then longest selected (a has length 5)
@@ -1113,8 +1113,8 @@ class TestEarliestStrategy(unittest.TestCase):
     def test_earliest_basic_overlap(self) -> None:
         """Test basic overlap resolution keeping earliest segment."""
         segments = [
-            Segment("first", 0, 5),
-            Segment("second", 3, 8),
+            Token("first", 0, 5),
+            Token("second", 3, 8),
         ]
         result = resolve_overlaps(segments, "earliest")
         self.assertEqual(to_simple(result), [("first", 0, 5)])
@@ -1122,9 +1122,9 @@ class TestEarliestStrategy(unittest.TestCase):
     def test_earliest_multiple_overlaps(self) -> None:
         """Test multiple overlapping segments keeping earliest."""
         segments = [
-            Segment("a", 0, 5),
-            Segment("b", 4, 7),
-            Segment("c", 6, 10),
+            Token("a", 0, 5),
+            Token("b", 4, 7),
+            Token("c", 6, 10),
         ]
         result = resolve_overlaps(segments, "earliest")
         # All segments overlap in a chain, keep only the first (earliest)
@@ -1133,10 +1133,10 @@ class TestEarliestStrategy(unittest.TestCase):
     def test_earliest_chain_overlaps(self) -> None:
         """Test chained overlaps with earliest strategy."""
         segments = [
-            Segment("a", 0, 3),
-            Segment("b", 2, 5),
-            Segment("c", 4, 7),
-            Segment("d", 6, 9),
+            Token("a", 0, 3),
+            Token("b", 2, 5),
+            Token("c", 4, 7),
+            Token("d", 6, 9),
         ]
         result = resolve_overlaps(segments, "earliest")
         # All segments overlap in a chain, keep only the first (earliest)
@@ -1145,9 +1145,9 @@ class TestEarliestStrategy(unittest.TestCase):
     def test_earliest_direct_only_true(self) -> None:
         """Test earliest strategy with direct_only=True."""
         segments = [
-            Segment("a", 0, 5),
-            Segment("b", 4, 7),
-            Segment("c", 6, 10),
+            Token("a", 0, 5),
+            Token("b", 4, 7),
+            Token("c", 6, 10),
         ]
         result = resolve_overlaps(segments, "earliest", direct_only=True)
         # Only direct overlaps considered
@@ -1156,9 +1156,9 @@ class TestEarliestStrategy(unittest.TestCase):
     def test_earliest_direct_only_false(self) -> None:
         """Test earliest strategy with direct_only=False (default)."""
         segments = [
-            Segment("a", 0, 5),
-            Segment("b", 4, 7),
-            Segment("c", 6, 10),
+            Token("a", 0, 5),
+            Token("b", 4, 7),
+            Token("c", 6, 10),
         ]
         result = resolve_overlaps(segments, "earliest", direct_only=False)
         # All segments form one overlapping chain, keep only the first
@@ -1167,9 +1167,9 @@ class TestEarliestStrategy(unittest.TestCase):
     def test_earliest_no_overlaps(self) -> None:
         """Test earliest strategy with no overlapping segments."""
         segments = [
-            Segment("a", 0, 3),
-            Segment("b", 5, 8),
-            Segment("c", 10, 13),
+            Token("a", 0, 3),
+            Token("b", 5, 8),
+            Token("c", 10, 13),
         ]
         result = resolve_overlaps(segments, "earliest")
         self.assertEqual(to_simple(result), [("a", 0, 3), ("b", 5, 8), ("c", 10, 13)])
@@ -1177,9 +1177,9 @@ class TestEarliestStrategy(unittest.TestCase):
     def test_earliest_adjacent_segments(self) -> None:
         """Test earliest strategy with adjacent (non-overlapping) segments."""
         segments = [
-            Segment("a", 0, 3),
-            Segment("b", 3, 6),
-            Segment("c", 6, 9),
+            Token("a", 0, 3),
+            Token("b", 3, 6),
+            Token("c", 6, 9),
         ]
         result = resolve_overlaps(segments, "earliest")
         # Adjacent segments don't overlap, all should be kept
@@ -1192,8 +1192,8 @@ class TestEarliestLongestStrategy(unittest.TestCase):
     def test_earliest_longest_basic(self) -> None:
         """Test basic earliest_longest strategy."""
         segments = [
-            Segment("short", 0, 3),
-            Segment("longer", 0, 8),
+            Token("short", 0, 3),
+            Token("longer", 0, 8),
         ]
         result = resolve_overlaps(segments, "earliest_longest")
         # Same start position, keep the longer one
@@ -1202,9 +1202,9 @@ class TestEarliestLongestStrategy(unittest.TestCase):
     def test_earliest_longest_different_starts(self) -> None:
         """Test earliest_longest with different start positions."""
         segments = [
-            Segment("a", 0, 5),
-            Segment("b", 2, 7),
-            Segment("c", 4, 9),
+            Token("a", 0, 5),
+            Token("b", 2, 7),
+            Token("c", 4, 9),
         ]
         result = resolve_overlaps(segments, "earliest_longest")
         # All segments overlap in a chain, keep only the first (earliest)
@@ -1213,9 +1213,9 @@ class TestEarliestLongestStrategy(unittest.TestCase):
     def test_earliest_longest_tie_breaking(self) -> None:
         """Test earliest_longest tie breaking (earliest first, then longest)."""
         segments = [
-            Segment("a", 0, 3),
-            Segment("b", 0, 5),
-            Segment("c", 2, 4),
+            Token("a", 0, 3),
+            Token("b", 0, 5),
+            Token("c", 2, 4),
         ]
         result = resolve_overlaps(segments, "earliest_longest")
         # Among segments starting at 0, keep the longest (b)
@@ -1225,9 +1225,9 @@ class TestEarliestLongestStrategy(unittest.TestCase):
     def test_earliest_longest_direct_only_true(self) -> None:
         """Test earliest_longest strategy with direct_only=True."""
         segments = [
-            Segment("a", 0, 5),
-            Segment("b", 4, 7),
-            Segment("c", 6, 10),
+            Token("a", 0, 5),
+            Token("b", 4, 7),
+            Token("c", 6, 10),
         ]
         result = resolve_overlaps(segments, "earliest_longest", direct_only=True)
         # Only direct overlaps considered
@@ -1236,9 +1236,9 @@ class TestEarliestLongestStrategy(unittest.TestCase):
     def test_earliest_longest_direct_only_false(self) -> None:
         """Test earliest_longest strategy with direct_only=False (default)."""
         segments = [
-            Segment("a", 0, 5),
-            Segment("b", 4, 7),
-            Segment("c", 6, 10),
+            Token("a", 0, 5),
+            Token("b", 4, 7),
+            Token("c", 6, 10),
         ]
         result = resolve_overlaps(segments, "earliest_longest", direct_only=False)
         # All segments form one overlapping chain, keep only the first

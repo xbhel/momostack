@@ -42,7 +42,7 @@ class EntityType(StrEnum):
 
 
 @dataclass
-class Segment:
+class Token:
     text: str
     start: int  # inclusive
     end: int  # exclusive
@@ -55,7 +55,7 @@ class Segment:
 
 
 @dataclass
-class Entity(Segment):
+class Entity(Token):
     entity_type: EntityType
     attrs: list[Entity] = field(default_factory=list)
     refers_to: Entity | None = None
@@ -64,7 +64,7 @@ class Entity(Segment):
     @classmethod
     def of(
         cls,
-        segment: Segment,
+        segment: Token,
         entity_type: EntityType,
         attrs: list[Entity] | None = None,
         refers_to: Entity | None = None,
@@ -81,3 +81,13 @@ class Entity(Segment):
             refers_to=refers_to,
             alias=alias
         )
+
+
+@dataclass
+class TokenSpan:
+    core: Token
+    normalized_text: str
+    nested: bool = False
+    nested_text: str | None = None
+    prefixes: list[Token] = field(default_factory=list)
+    suffixes: list[Token] = field(default_factory=list)

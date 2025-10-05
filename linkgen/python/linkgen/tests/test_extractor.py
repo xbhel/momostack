@@ -36,8 +36,8 @@ class TestCaseNoExtractor(unittest.TestCase):
                     alias="（2025）沪0101刑初第682号"
                 ),
                 Entity(
-                    text="683号",
-                    start=22,
+                    text="第683号",
+                    start=21,
                     end=26,
                     entity_type=EntityType.CASE_NO,
                     alias="（2025）沪0101刑初第683号"

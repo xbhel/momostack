@@ -81,32 +81,29 @@ class CaseNoExtractor(Extractor):
         """
         prefix = None
 
-        for item in parts:
-            numeric, index = text_util.find_last_numeric_suffix(item)
-
-            # If no numeric suffix can be determined, skip this item gracefully.
-            if not numeric:
-                offset = offset + len(item) + 1
-                continue
-
-            if prefix is not None:
-                entity_text = numeric
-                start = offset + index
-            else:
-                start = offset
-                # Derive the shared prefix from the current item
+        for part in parts:
+            alias = None
+            if prefix is None:
+                _, index = text_util.find_last_numeric_suffix(part)
+                # If no numeric suffix can be determined, skip.
+                if index <= 0:
+                    logger.debug("Ignored CASE_NO without valid court id: %r", part)
+                    break
+                # Derive the shared prefix from the current part
                 # to match the index basis
-                prefix = item[:index]
-                entity_text = prefix + numeric
+                alias = f"{part.strip().rstrip('号')}号"
+                prefix = part[:index]
+            else:
+                alias = f"{prefix}{part.strip().strip('第号')}号"
 
             yield Entity(
-                text=entity_text,
-                start=start,
-                end=offset + len(item),
+                text=part,
+                start=offset,
+                end=offset + len(part),
                 entity_type=EntityType.CASE_NO,
-                alias=f"{prefix}{numeric.rstrip('号')}号",
+                alias=alias,
             )
-            offset = offset + len(item) + 1
+            offset = offset + len(part) + 1
 
 
 class LawArticleExtractor(Extractor):
@@ -163,7 +160,8 @@ class LawArticleExtractor(Extractor):
         split by delimiters). Returns None when conversion fails.
         """
         try:
-            cn_num = text.strip().lstrip("第").rstrip("条")
+            # remove ' ', '第' and '条'
+            cn_num = text.strip().strip("第条")
             if not cn_num:
                 return None
             art_num = cn2an.cn2an(cn_num, "normal")
