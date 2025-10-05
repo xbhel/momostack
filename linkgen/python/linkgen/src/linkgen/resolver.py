@@ -12,16 +12,16 @@ _LEFT_BRACKETS: Final = {"(", "（"}  # noqa: RUF001
 _SENTENCE_ENDING: Final = {"?", "!", ".", "。", "？", "！"}  # noqa: RUF001
 
 
-def resolve_entities(text: str, entities: Iterator[Entity]) -> list[Entity]:
+def resolve_entities(text: str, entities_it: Iterator[Entity]) -> list[Entity]:
     # Post-process to filter out invalid entities
-    entities = _validate_entities(text, entities)
+    entities_it = _validate_entities(text, entities_it)
 
     # If two entities have the same (start, end), the first one will remain,
     # so the earlier position has higher priority.
-    entity_list = resolve_overlaps(entities, strategy="longest", direct_only=True)
+    entity_list = resolve_overlaps(entities_it, strategy="longest", direct_only=True)
 
     _associate_entities(text, entity_list)
-    return _remove_orphan_entities(entities)
+    return _remove_orphan_entities(entity_list)
 
 
 def _validate_entities(
@@ -228,9 +228,9 @@ def _skip_leading_whitespace(text: str, start: int, end: int) -> int:
     """
     Move past leading whitespace characters.
     """
-    return next(
-        (i for i in range(start, end) if not text_util.is_whitespace(text[i])), end
-    )
+    while start < end and text_util.is_whitespace(text[start]):
+        start += 1
+    return start
 
 
 def _skip_leading_element_tag(text: str, start: int, end: int) -> int:
@@ -238,7 +238,7 @@ def _skip_leading_element_tag(text: str, start: int, end: int) -> int:
     Move past leading HTML/XML element tags.
     """
     if text[start] == "<":
-        last_close = text.find(">", start, end)
-        if last_close > start:
-            return last_close + 1
+        nearest_close = text.find(">", start, end)
+        if nearest_close > start:
+            return nearest_close + 1
     return start

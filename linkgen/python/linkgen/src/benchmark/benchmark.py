@@ -328,7 +328,7 @@ def main() -> None:
         from linkgen.resolver import resolve_entities
 
         def f(text: str) -> Any:
-            return resolve_entities(text, extract_entities(text))
+            resolve_entities(text, extract_entities(text))
 
         func_to_benchmark = f
 

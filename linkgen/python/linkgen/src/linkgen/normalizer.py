@@ -8,7 +8,6 @@ from linkgen.utils import text_util
 if TYPE_CHECKING:
     import re
 
-_COMMA: Final = ","
 _LEFT_BRACKET: Final = "("
 _RIGHT_BRACKET: Final = ")"
 _FORWARD_CHINESE: Final = "转发"
@@ -122,26 +121,27 @@ class ChineseLawTitleNormalizer(Normalizer):
             return text
 
         brackets = self._bracket_extractor.extract(text)
-        start_map = {x.start: x for x in brackets}
+        start_idx_lookup = {x.start: x for x in brackets}
 
-        start_index = 0
+        start_idx = 0
         for item in promulgators:
-            # Discontinuous promulgators
-            if item.start > start_index:
+            # Discontinuous promulgators(e.g. A,xxx,B)
+            if item.start > start_idx:
                 break
             # It is a part of the description of the previous promulgator
-            if item.start < start_index:
+            # e.g. A(B)
+            if item.start < start_idx:
                 continue
 
-            start_index = item.end
+            start_idx = item.end
             # Move past any immediately following brackets
-            while bracket := start_map.get(start_index):
-                start_index = bracket.end
+            while bracket := start_idx_lookup.get(start_idx):
+                start_idx = bracket.end
             # Skip trailing commas
-            while start_index < len(text) and text[start_index] == _COMMA:
-                start_index += 1
+            while start_idx < len(text) and text[start_idx] == ",":
+                start_idx += 1
 
-        if start_index == len(text):
+        if start_idx == len(text):
             return text
 
-        return text[start_index:]
+        return text[start_idx:]

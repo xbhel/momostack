@@ -8,7 +8,7 @@ from typing import Literal, override
 
 import ahocorasick  # type: ignore  # noqa: PGH003
 
-from linkgen.models import Segment
+from linkgen.models import Token
 from linkgen.utils import coll_util
 
 __author__ = "xbhel"
@@ -25,17 +25,17 @@ class Extractor(ABC):
     """
 
     @abstractmethod
-    def extract(self, text: str) -> Iterable[Segment]:
+    def extract(self, text: str) -> Iterable[Token]:
         """
         Extract entities from the given text.
         """
         raise NotImplementedError
 
-    def _make_value(self, text: str, start: int, end: int) -> Segment:
+    def _make_value(self, text: str, start: int, end: int) -> Token:
         """
         Helper to create a Segment object.
         """
-        return Segment(text, start, end)
+        return Token(text, start, end)
 
 
 class PairedSymbolExtractor(Extractor):
@@ -77,11 +77,11 @@ class PairedSymbolExtractor(Extractor):
         self._symbol_pattern = re.compile("|".join(re.escape(s) for s in symbol_pair))
 
     @override
-    def extract(self, text: str) -> Iterator[Segment]:
+    def extract(self, text: str) -> Iterator[Token]:
         """Extract segments according to the configured nesting strategy."""
         yield from self._extract_func(text)
 
-    def _extract_all(self, text: str) -> Iterable[Segment]:
+    def _extract_all(self, text: str) -> Iterable[Token]:
         stack: deque[tuple[int, str]] = deque()
         for matcher in self._symbol_pattern.finditer(text):
             index, val = matcher.start(), matcher.group()
@@ -96,10 +96,10 @@ class PairedSymbolExtractor(Extractor):
             left_index, _ = stack.pop()
             yield self._make_value(text, left_index, index + 1)
 
-    def _extract_outermost(self, text: str) -> Iterable[Segment]:
+    def _extract_outermost(self, text: str) -> Iterable[Token]:
         depth = 0
         stack: deque[tuple[int, str]] = deque()
-        pending: dict[int, list[Segment]] = defaultdict(list)
+        pending: dict[int, list[Token]] = defaultdict(list)
         for matcher in self._symbol_pattern.finditer(text):
             index, val = matcher.start(), matcher.group()
             # left symbol
@@ -128,7 +128,7 @@ class PairedSymbolExtractor(Extractor):
 
         pending.clear()
 
-    def _extract_innermost(self, text: str) -> Iterable[Segment]:
+    def _extract_innermost(self, text: str) -> Iterable[Token]:
         depth = max_depth_seen = 0
         stack: deque[tuple[int, str]] = deque()
         for matcher in self._symbol_pattern.finditer(text):
@@ -155,7 +155,7 @@ class PairedSymbolExtractor(Extractor):
 
     def _get_strategy_handler(
         self, strategy: str
-    ) -> Callable[[str], Iterable[Segment]]:
+    ) -> Callable[[str], Iterable[Token]]:
         if strategy == "innermost":
             return self._extract_innermost
         if strategy == "outermost":
@@ -163,13 +163,13 @@ class PairedSymbolExtractor(Extractor):
         return self._extract_all
 
     @override
-    def _make_value(self, text: str, start: int, end: int) -> Segment:
+    def _make_value(self, text: str, start: int, end: int) -> Token:
         if self._include_symbols:
-            return Segment(text[start:end], start, end)
+            return Token(text[start:end], start, end)
 
         inner_start = start + len(self._left)
         inner_end = end - len(self._right)
-        return Segment(text[inner_start:inner_end], inner_start, inner_end)
+        return Token(text[inner_start:inner_end], inner_start, inner_end)
 
 
 class KeywordExtractor(Extractor):
@@ -199,7 +199,7 @@ class KeywordExtractor(Extractor):
         self._max_keyword_length = len(max(self._automaton.keys(), key=len))
 
     @override
-    def extract(self, text: str) -> Iterator[Segment]:
+    def extract(self, text: str) -> Iterator[Token]:
         """
         Extract all keyword matches from the input text.
         Args:
@@ -266,7 +266,7 @@ class PatternExtractor(Extractor):
         self._patterns = patterns if isinstance(patterns, list) else [patterns]
 
     @override
-    def extract(self, text: str) -> Iterator[Segment]:
+    def extract(self, text: str) -> Iterator[Token]:
         found_any = False
         for pattern in self._patterns:
             for matcher in pattern.finditer(text):
@@ -301,14 +301,14 @@ class ChainedExtractor(Extractor):
         return new_extractor
 
     @override
-    def extract(self, text: str) -> Iterator[Segment]:
-        segments = iter([Segment(text, 0, len(text))])
+    def extract(self, text: str) -> Iterator[Token]:
+        segments = iter([Token(text, 0, len(text))])
         for extractors in self._levels:
             segments = self._process_level_lazy(segments, extractors)
         yield from segments
 
-    def extract_with_tuple_result(self, text: str) -> tuple[list[Segment], ...]:
-        segments = [Segment(text, 0, len(text))]
+    def extract_with_tuple_result(self, text: str) -> tuple[list[Token], ...]:
+        segments = [Token(text, 0, len(text))]
 
         for level in range(len(self._levels) - 1):
             segments_list = self._process_level(segments, self._levels[level])
@@ -317,8 +317,8 @@ class ChainedExtractor(Extractor):
         return tuple(self._process_level(segments, self._levels[-1]))
 
     def _process_level_lazy(
-        self, segments: Iterator[Segment], extractors: tuple[Extractor, ...]
-    ) -> Generator[Segment, None, None]:
+        self, segments: Iterator[Token], extractors: tuple[Extractor, ...]
+    ) -> Generator[Token, None, None]:
         for segment in segments:
             offset = segment.start
             for extractor in extractors:
@@ -329,12 +329,12 @@ class ChainedExtractor(Extractor):
                     yield extracted_segment
 
     def _process_level(
-        self, segments: list[Segment], extractors: tuple[Extractor, ...]
-    ) -> list[list[Segment]]:
+        self, segments: list[Token], extractors: tuple[Extractor, ...]
+    ) -> list[list[Token]]:
         result = []
 
         for extractor in extractors:
-            next_segments: list[Segment] = []
+            next_segments: list[Token] = []
 
             for segment in segments:
                 offset = segment.start
@@ -349,7 +349,7 @@ class ChainedExtractor(Extractor):
         return result
 
 
-def resolve_overlaps[T: Segment](
+def resolve_overlaps[T: Token](
     iterable: Iterable[T],
     strategy: Literal["longest", "earliest", "earliest_longest"],
     direct_only: bool = False,
@@ -406,7 +406,7 @@ def resolve_overlaps[T: Segment](
     return func(segments, direct_only)
 
 
-def _resolve_overlaps_keep_longest[T: Segment](
+def _resolve_overlaps_keep_longest[T: Token](
     segments: list[T], direct_only: bool = False
 ) -> list[T]:
     result = []
@@ -432,7 +432,7 @@ def _resolve_overlaps_keep_longest[T: Segment](
     return result
 
 
-def _resolve_overlaps_keep_earliest[T: Segment](
+def _resolve_overlaps_keep_earliest[T: Token](
     segments: list[T], direct_only: bool = False
 ) -> list[T]:
     result = []
