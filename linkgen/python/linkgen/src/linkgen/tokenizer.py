@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable
 
 _FORWARD_CHINESE: Final = "转发"
+_ABOUT_CHINESE: Final = "关于"
 
 
 class BaseTokenizer(ABC):
@@ -76,8 +77,9 @@ class LawTitleTokenizer(BaseTokenizer):
         strategy="outermost",
         allow_fallback_on_unclosed=True,
     )
+    _suffixes_pattern = cast("list[re.Pattern[str]]", patterns["title_suffixes"])
 
-    def __init__(self, promulgators: Iterable[str]) -> None:
+    def __init__(self, promulgators: Iterable[str], strict: bool = False) -> None:
         """Initialize tokenizer with promulgator keywords.
 
         Args:
@@ -89,6 +91,7 @@ class LawTitleTokenizer(BaseTokenizer):
         self._promulgator_extractor = KeywordExtractor(
             promulgators, ignore_overlaps=True
         )
+        self._strict = strict
 
     def tokenize(self, text: str) -> TokenSpan:
         """Tokenize a law title into prefix tokens, core, and suffix tokens.
@@ -163,6 +166,9 @@ class LawTitleTokenizer(BaseTokenizer):
         )
 
     def _extract_prefixes(self, text: str) -> tuple[int, list[Token]]:
+        return self._extract_prefix_promulgators(text)
+
+    def _extract_prefix_promulgators(self, text: str) -> tuple[int, list[Token]]:
         """Extract prefix promulgators and any immediately following brackets.
 
         Walks forward from the beginning, consuming consecutive promulgator
@@ -235,16 +241,28 @@ class LawTitleTokenizer(BaseTokenizer):
         trailing.sort(key=lambda s: s.start)
         return end_idx, trailing
 
-    def _is_valid_suffix(self, suffix: Token) -> bool:  # noqa: ARG002
-        """Check if a version token is valid.
+    def _is_valid_suffix(self, suffix: Token) -> bool:
+        """Check if a version token is valid using strict pattern matching.
 
         Args:
-            suffix: Token to validate.
+            version: Token to validate.
 
         Returns:
-            True if the suffix is valid, False otherwise.
+            True if the version is valid, False otherwise.
         """
-        return True  # Base implementation accepts all versions
+        if self._strict:
+            return any(pattern.match(suffix.text) for pattern in self._suffixes_pattern)
+        return True
+
+    def _update_token_offset(self, token: Token, offset: int) -> None:
+        """Shift token offsets by a constant amount.
+
+        Args:
+            token: The Token to update.
+            offset: The amount to shift all token positions by.
+        """
+        token.start += offset
+        token.end += offset
 
 
 class NestedLawTitleTokenizer(LawTitleTokenizer):
@@ -282,11 +300,12 @@ class NestedLawTitleTokenizer(LawTitleTokenizer):
     """
 
     _nested_title_pattern = cast("re.Pattern[str]", patterns["nested_title"])
-    _suffixes_pattern = cast("list[re.Pattern[str]]", patterns["title_suffixes"])
+    _nested_title_strict_patterns = cast(
+        "list[re.Pattern[str]]", patterns["nested_title_strict"]
+    )
 
     def __init__(self, promulgators: Iterable[str], strict: bool = False) -> None:
-        super().__init__(promulgators)
-        self._strict = strict
+        super().__init__(promulgators, strict)
 
     def _extract_token_span(self, text: str) -> TokenSpan:
         base_span = super()._extract_token_span(text)
@@ -308,22 +327,6 @@ class NestedLawTitleTokenizer(LawTitleTokenizer):
         self._update_token_span_offset(token_span, offset)
         return token_span
 
-    @override
-    def _is_valid_suffix(self, version: Token) -> bool:
-        """Check if a version token is valid using strict pattern matching.
-
-        Args:
-            version: Token to validate.
-
-        Returns:
-            True if the version is valid, False otherwise.
-        """
-        if self._strict:
-            return any(
-                pattern.match(version.text) for pattern in self._suffixes_pattern
-            )
-        return True
-
     def _extract_nested_text(
         self, text: str, base_span: TokenSpan
     ) -> tuple[int, str | None]:
@@ -343,11 +346,38 @@ class NestedLawTitleTokenizer(LawTitleTokenizer):
             return -1, None
 
         # Additional strict validation for core text format
-        start, end = base_span.core.start, base_span.core.end
-        if self._strict and (text[start] != "<" or text[end - 1] != ">"):
+        if self._strict and not any(
+            pattern.match(base_span.core.text)
+            for pattern in self._nested_title_strict_patterns
+        ):
             return -1, None
 
         return matcher.start(1), matcher.group(1)
+
+    @override
+    def _extract_prefixes(self, text: str) -> tuple[int, list[Token]]:
+        start_idx, prefixes = super()._extract_prefixes(text)
+        about_idx, about = self._extract_prefix_about(text, start_idx)
+
+        if about:
+            start_idx = about_idx
+            prefixes.append(about)
+
+        return start_idx, prefixes
+
+    def _extract_prefix_about(self, text: str, offset: int) -> tuple[int, Token | None]:
+        if text.find(_FORWARD_CHINESE) != -1 or (
+            text.find("<") != -1 and text.find(">") != -1
+        ):
+            return 0, None
+
+        about_idx = text.find(_ABOUT_CHINESE, offset)
+        # strict mode: about must be at the beginning
+        if about_idx == -1 or (self._strict and about_idx != offset):
+            return 0, None
+
+        end_idx = about_idx + len(_ABOUT_CHINESE)
+        return end_idx, Token(text[offset:end_idx], offset, end_idx)
 
     def _update_token_span_offset(self, token_span: TokenSpan, offset: int) -> None:
         """Shift all token offsets in a `TokenSpan` by a constant amount.
@@ -356,11 +386,8 @@ class NestedLawTitleTokenizer(LawTitleTokenizer):
             token_span: The TokenSpan to update.
             offset: The amount to shift all token positions by.
         """
-        for token in chain(
-            [token_span.core],
-            token_span.prefixes,
-            token_span.suffixes,
-        ):
+        self._update_token_offset(token_span.core, offset)
+        for token in chain(token_span.prefixes, token_span.suffixes):
             token.start += offset
             token.end += offset
 
