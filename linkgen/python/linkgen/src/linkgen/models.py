@@ -91,3 +91,22 @@ class TokenSpan:
     nested_text: str | None = None
     prefixes: list[Token] = field(default_factory=list)
     suffixes: list[Token] = field(default_factory=list)
+
+
+@dataclass
+class DocMeta:
+    doc_id: str
+    doc_type: str
+    doc_url: str
+    title: str
+    core_term: str
+    status: str
+    created_at: int
+    updated_at: int
+    release_date: str
+    effective_status: str
+    effective_date: str
+    effective_scope: str
+    issue_no: str
+    timestamp_version: int
+    promulgators: list[str]
