@@ -710,9 +710,40 @@ In both cases, the normalization process extracts Part D (Law Title) and then ap
 - **Performance Optimization**: Support batch index building and incremental updates.  
 
 
-### Tokenization
+### Validation
 
-#### Common Prefixes
+#### Scenario 1: Core + [Suffix]
+
+- 民法则通
+- 民法则通(一)
+
+```json
+[
+    {
+        "core": "民法则通",
+        "prefixes": [],
+        "suffixes": []
+    },
+    {
+        "core": "民法则通",
+        "prefixes": [],
+        "suffixes": ["(一)"]
+    }
+]
+```
+- 民法则通
+  - Index.search("prefixes is empty", "民法则通") -> All
+  - filter(all, suffixes is empty) -> idx 1
+- 民法则通（一）
+  - Index.search("prefixes is empty", "民法则通") -> All
+  - Index.search("suffix", "（一）") -> idx 1
+- 民法则通（二）
+  - Index.search("prefixes is empty", "民法则通") -> All
+  - Index.search("suffix", "（二）") -> None
+- 民法则通（invalid suffix）
+  - Index.search("prefixes is empty", "民法则通（invalid suffix）") -> None
+
+#### Scenario 2: Common Prefixes + Core + [Suffixes] 
 
 - **中华人民共和国**民法典(2020年)
 - **中华人民共和国**民法典(1996年)
@@ -722,80 +753,35 @@ In both cases, the normalization process extracts Part D (Law Title) and then ap
 [
     {
         "core": "民法典",
-        "prefixes": [
-            {
-                "start": 0,
-                "end": 6,
-                "text": "中华人民共和国",
-            }
-        ], 
-        "suffixes": [
-            {
-                "start": 10,
-                "end": 17,
-                "text": "(2020年)",
-            }, 
-        ]
+        "prefixes": ["中华人民共和国"],
+        "suffixes": ["(2020年)"]
     },
     {
         "core": "民法典",
-        "prefixes": [
-            {
-                "start": 0,
-                "end": 6,
-                "text": "中华人民共和国",
-            }
-        ], 
-        "suffixes": [
-            {
-                "start": 10,
-                "end": 17,
-                "text": "(1996年)",
-            }, 
-        ]
+        "prefixes": ["中华人民共和国"], 
+        "suffixes": ["(1996年)"]
     },
     {
         "core": "民法典",
-        "prefixes": [
-            {
-                "start": 0,
-                "end": 6,
-                "text": "中华人民共和国",
-            }
-        ], 
+        "prefixes": ["中华人民共和国"],
         "suffixes": []
     }
 ]
 ```
 
 - 民法典
-  - PrefixInvertedIndex.search("中华人民共和国")
-    - All
+  - Index.search("prefix", "中华人民共和国") -> All
+  - + Index.search("prefixes is empty", "民法典") -> None
+  - filter(all, suffixes is empty) -> idx 3
 - 民法典(2020年)
-  - PrefixInvertedIndex.search("中华人民共和国")
-    - All
-      - SuffixInvertedIndex.search("(2020年)")
-        - 0
-  - len(result) == 1
-    - result => 0
-- 民法典(xxx)
-  - PrefixInvertedIndex.search("中华人民共和国")
-    - All
-      - SuffixInvertedIndex.search("(xxx)")
-        - None
-      - allow fallback? 
-        - Y -> previous -> All -> attribute Search
-        - N -> None
+  - Index.search("prefix", "中华人民共和国") -> All
+  - + Index.search("prefixes is empty", "民法典") -> None
+  - Index.search("suffix", "(2020年)") -> 1
+- 民法典(invalid suffix) -> None
+  - Index.search("prefix", "中华人民共和国") -> All
+- 中华人民共和国民法典 -> 中华人民共和国 + 民法典
 
-- 中华人民共和国民法典
-- 中华人民共和国民法典(xxx)
-- 中华人民共和国民法典(2020年)
-
-
-
-允许省略常见前缀 like `中华人民共和国`。
-
-#### Prefixes - Promulgators 
+#### Scenario 3: Prefix Promulgators + Core + [Suffixes] 
 
 - **上海市场监管局**发布市场监管章程
 - **深圳市场监管局**发布市场监管章程
@@ -804,47 +790,71 @@ In both cases, the normalization process extracts Part D (Law Title) and then ap
 [
     {
         "core": "发布市场监管章程",
-        "prefixes": [
-            {
-                "start": 0,
-                "end": 7,
-                "text": "上海市场监管局",
-            }
-        ], 
+        "prefixes": ["上海市场监管局"], 
         "suffixes": []
     }
     {
         "core": "发布市场监管章程",
-        "prefixes": [
-            {
-                "start": 0,
-                "end": 7,
-                "text": "深圳市场监管局",
-            }
-        ], 
+        "prefixes": ["深圳市场监管局"],
         "suffixes": []
     }
     {
         "core": "发布市场监管章程",
-        "prefixes": [
-            {
-                "start": 0,
-                "end": 3,
-                "text": "商业部",
-            },
-            {
-                "start": 4,
-                "end": 9,
-                "text": "市场监管局",
-            }
-        ], 
+        "prefixes": ["商业部","市场监管局"], 
+        "suffixes": [],
+        "normalized_title": "商业部、市场监管局发布市场监管章程"
+    }
+]
+```
+- 发布市场监管章程 
+  - Index.search("prefixes is empty", "发布市场监管章程") -> idx 0
+- 上海市场监管局发布市场监管章程 -> 
+  - Index.search("prefix", "上海市场监管局") -> idx 1
+
+
+if prefixes is empty:
+    Index.search("prefix", "中华人民共和国")
+    + Index.search("prefixes is empty", "发布市场监管章程")
+else:
+    Index.search("prefix", prefixes)
+
+#### Scenario 4: Attr Promulgators + Core + [Suffix]
+
+```json
+[
+    {
+        "core": "发布市场监管章程",
+        "prefixes": ["上海市场监管局"], 
         "suffixes": []
+    },
+    {
+        "core": "发布市场监管章程",
+        "prefixes": ["深圳市场监管局"],
+        "suffixes": []
+    },
+    {
+        "core": "发布市场监管章程",
+        "prefixes": [], 
+        "suffixes": [],
+        "sources": ["上海市场监管局"]
+    },
+    {
+        "core": "发布市场监管章程",
+        "prefixes": ["商业部","市场监管局"], 
+        "suffixes": [],
+        "normalized_title": "商业部、市场监管局发布市场监管章程"
     }
 ]
 ```
 
-- 发布市场监管章程 -> None
-- 上海市场监管局发布市场监管章程 -> 0
+要么完全等于 title 里面的
+要么没有 prefix，然后是 source 的子集
+
+- 发布市场监管章程 + attr: 上海市场监管局
+  - Index.search("prefixes is empty", "发布市场监管章程")
+  - + Index.search("prefixes", "上海市场监管局")
+    - filter (prefixes == ["上海市场监管局"])
+  - filter "上海市场监管局" in source
 
 
 #### Nested Structures
@@ -911,4 +921,3 @@ In both cases, the normalization process extracts Part D (Law Title) and then ap
     "suffixes": []
 }
 ```
-

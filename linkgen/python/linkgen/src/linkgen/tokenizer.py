@@ -242,13 +242,13 @@ class LawTitleTokenizer(BaseTokenizer):
         return end_idx, trailing
 
     def _is_valid_suffix(self, suffix: Token) -> bool:
-        """Check if a version token is valid using strict pattern matching.
+        """Check if a suffix token is valid using strict pattern matching.
 
         Args:
-            version: Token to validate.
+            suffix: Token to validate.
 
         Returns:
-            True if the version is valid, False otherwise.
+            True if the suffix is valid, False otherwise.
         """
         if self._strict:
             return any(pattern.match(suffix.text) for pattern in self._suffixes_pattern)
@@ -369,12 +369,12 @@ class NestedLawTitleTokenizer(LawTitleTokenizer):
         if text.find(_FORWARD_CHINESE) != -1 or (
             text.find("<") != -1 and text.find(">") != -1
         ):
-            return 0, None
+            return -1, None
 
         about_idx = text.find(_ABOUT_CHINESE, offset)
         # strict mode: about must be at the beginning
         if about_idx == -1 or (self._strict and about_idx != offset):
-            return 0, None
+            return -1, None
 
         end_idx = about_idx + len(_ABOUT_CHINESE)
         return end_idx, Token(text[offset:end_idx], offset, end_idx)
