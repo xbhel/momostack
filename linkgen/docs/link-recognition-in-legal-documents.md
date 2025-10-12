@@ -723,20 +723,15 @@ In both cases, the normalization process extracts Part D (Law Title) and then ap
   - promulgators prefixes
   - common prefixes(such as 中华人民共和国)
 - suffix_index
-- release_date_index
-  - date range search should be supported
-  - date part search should be supported(year, year + month, date and datetime)
-- effective_date_index
+- date_index: release_date, effective_date
   - date range search should be supported
   - date part search should be supported(year, year + month, date and datetime)
 - version_index
   - issue_no
 - promulgator_index
   - promulgators metadata rather than promulgators prefixes
-- text_without_suffix_index
-  - prefixes + core
-- text_without_prefix_index
-  - core + suffixes
+- empty_prefix_index
+- empty_suffix_index
 
 
 **Law Title Simple Patterns**
@@ -787,16 +782,79 @@ MOCK_DATA = [
     "最高人民检察院 国务院关于xxx（征求意见）",  # Promulgators + 关于 + Core + Suffix
     "最高人民检察院 国务院关于xxx（2021）（征求意见）",  # Promulgators + 关于 + Core + Suffixes
 ]
+
+# 章程
+MockData2 = [
+    "上海证券交易所章程",
+    "深圳证券交易所章程",
+    "中国注册会计师协会关于印发《中国注册会计师协会章程》的通知",
+    "关于发布《上海证券交易所章程》的通知",
+    "关于发布《深圳证券交易所章程》的通知",
+]
 ```
 
-**Law Title Search 1**
+**Law Title Search Scenarios for Simple Title**
+
+- By prefix: 通过前缀匹配去确定一篇 "唯一" 的文档，在大多数情况下是可行的，但不能处理：
+  - 多版本法规 (such 中华人民共和国刑法（1999），中华人民共和国刑法（2003）).
+  - 没有 prefix 情况，like Core Term《章程》 will match MockData2 all items.
+
+```python
+# Core Term: xxx
+
+## Input: xxx
+Index.search("empty_prefix_index", "xxx")
++ Index.startswith("prefix_index", "中华人民共和国") 
++ Index.startswith("prefix_index", "关于")
+is None # fallback to select this if allow fuzzy match 
++ Index.search("effective_scope_index", "country")
+
+## Input: prefix[es] + xxx
+Index.search("prefix_index", prefixes) # 必须匹配内层的
+
+## Input: xxx + attrs(promulgators)
+Index.search("prefix_index", promulgators)
+
+# Input: prefix[es] + xxx + attr(promulgators)
+Index.search("prefix_index", prefixes + promulgators)
+```
+
+- By suffix: 如果通过前缀匹配存在多个版本，则应用 suffix 来进一步确定版本
 
 ```python
 # Input: xxx
-Index.search("text_without_suffix_index", "xxx") # prefixes is empty
-+ Index.startswith("prefix_index", "中华人民共和国") # strict => startswith
-+ Index.startswith("prefix_index", "关于")# strict => startswith
+All # Index.search("empty_suffix_index", "xxx")
+
+# Input: xxx + suffix[es]
+Index.search("suffix_index", suffixes)
 ```
+
+- By attrs: 同样用来进一步确定版本。
+
+```python
+# attr: date
+Index.search("date_index", date)
+
+# attr: version
+Index.search("version_index", issue_no)
+
+# attr: promulgators
+Index.search("promulgator_index", promulgators)
+```
+
+- Others
+  - non-nested title should be priority match documents that are nested title.
+  - if there are still many documents, the document which is it's date closest will be selected. 
+  - if effective_scope == 'country' 才使用 nested_title_tokenizer
+
+**Law Title Search Scenarios for Nested Title**
+
+```python
+# Core Term: 关于发布《上海证券交易所章程》的通知
+```
+- the nested title only match documents that also are nested title.
+- the remain match steps are the same with non-nested title
+
 
 全国人民代表大会常务委员会关于修改《中华人民共和国统计法》的决定
 林业部关于发布《中华人民共和国陆生野生动物保护实施条例》的通知
@@ -817,6 +875,7 @@ Index.search("text_without_suffix_index", "xxx") # prefixes is empty
   - 《中华人民共和国公司法》若干问题的规定(一)
   - 关于适用《中华人民共和国公司法》若干问题的规定(一)
   - 最高人民法院关于适用《中华人民共和国公司法》若干问题的规定(一)
+
 
 
 

@@ -29,7 +29,7 @@ _FORWARD_CHINESE: Final = "转发"
 _ABOUT_CHINESE: Final = "关于"
 
 
-class BaseTokenizer(ABC):
+class Tokenizer(ABC):
     """Abstract base class for law title tokenizers."""
 
     @abstractmethod
@@ -48,7 +48,7 @@ class BaseTokenizer(ABC):
         raise NotImplementedError("Subclasses must implement tokenize method")
 
 
-class LawTitleTokenizer(BaseTokenizer):
+class LawTitleTokenizer(Tokenizer):
     """Standard tokenizer for law titles.
 
     Performs text normalization and extracts:
@@ -79,19 +79,31 @@ class LawTitleTokenizer(BaseTokenizer):
     )
     _suffixes_pattern = cast("list[re.Pattern[str]]", patterns["title_suffixes"])
 
-    def __init__(self, promulgators: Iterable[str], strict: bool = False) -> None:
+    def __init__(
+        self,
+        prefixes: Iterable[str],
+        strict: bool = False,
+        first_only_prefixes: Iterable[str] | None = None,
+        last_only_prefixes: Iterable[str] | None = None,
+    ) -> None:
         """Initialize tokenizer with promulgator keywords.
 
         Args:
-            promulgators: Collection of promulgator keywords to detect.
+        - prefixes: Collection of prefix keywords to detect.
+        - strict: Strict mode,
+            suffixes/prefixes that match the strict pattern will be detected.
+        - first_only_prefixes:
+            If provided, only the first occurrence of these prefixes will be detected.
+        - last_only_prefixes:
+            If provided, only the last occurrence of these prefixes will be detected.
 
         Raises:
-            ValueError: If the provided keyword list is empty.
+        - ValueError: If the provided keyword list is empty.
         """
-        self._promulgator_extractor = KeywordExtractor(
-            promulgators, ignore_overlaps=True
-        )
         self._strict = strict
+        self._first_only_prefixes = frozenset(first_only_prefixes or [])
+        self._last_only_prefixes = frozenset(last_only_prefixes or [])
+        self._prefix_extractor = KeywordExtractor(prefixes, ignore_overlaps=True)
 
     def tokenize(self, text: str) -> TokenSpan:
         """Tokenize a law title into prefix tokens, core, and suffix tokens.
@@ -166,9 +178,6 @@ class LawTitleTokenizer(BaseTokenizer):
         )
 
     def _extract_prefixes(self, text: str) -> tuple[int, list[Token]]:
-        return self._extract_prefix_promulgators(text)
-
-    def _extract_prefix_promulgators(self, text: str) -> tuple[int, list[Token]]:
         """Extract prefix promulgators and any immediately following brackets.
 
         Walks forward from the beginning, consuming consecutive promulgator
@@ -181,7 +190,7 @@ class LawTitleTokenizer(BaseTokenizer):
         Returns:
             Tuple of (core_start_index, list_of_prefix_tokens).
         """
-        promulgators_it = self._promulgator_extractor.extract(text)
+        promulgators_it = self._prefix_extractor.extract(text)
         promulgators = sorted(promulgators_it, key=lambda x: x.start)
         if not promulgators:
             return 0, []
@@ -192,7 +201,7 @@ class LawTitleTokenizer(BaseTokenizer):
 
         for item in promulgators:
             # Discontinuous promulgators (e.g. A,xxx,B)
-            if item.start > start_idx:
+            if item.start > start_idx or not self._is_valid_prefix(text, item):
                 break
             # It is a part of the description of the previous promulgator
             # e.g. A(B)
@@ -206,6 +215,10 @@ class LawTitleTokenizer(BaseTokenizer):
             # Skip trailing commas
             while start_idx < len(text) and text[start_idx] == ",":
                 start_idx += 1
+
+            # If the prefix is last-only, break the loop
+            if self._is_last_only_prefix(item):
+                break
 
         return start_idx, [x for x in promulgators if x.end <= start_idx]
 
@@ -232,7 +245,7 @@ class LawTitleTokenizer(BaseTokenizer):
         trailing: list[Token] = []
         # Remove brackets from the end, working backwards, collecting them
         while bracket := end_idx_lookup.get(end_idx):
-            if not self._is_valid_suffix(bracket):
+            if not self._is_valid_suffix(text, bracket):
                 break
             trailing.append(bracket)
             end_idx = bracket.start
@@ -241,20 +254,36 @@ class LawTitleTokenizer(BaseTokenizer):
         trailing.sort(key=lambda s: s.start)
         return end_idx, trailing
 
-    def _is_valid_suffix(self, suffix: Token) -> bool:
+    def _is_valid_prefix(self, _text: str, prefix: Token) -> bool:
+        return prefix.start == 0 if self._is_first_only_prefix(prefix) else True
+
+    def _is_first_only_prefix(self, prefix: Token) -> bool:
+        return bool(self._first_only_prefixes) and (
+            prefix.text in self._first_only_prefixes
+        )
+
+    def _is_last_only_prefix(self, prefix: Token) -> bool:
+        # Returns True if the prefix is in the last-only set and the set is non-empty.
+        return bool(self._last_only_prefixes) and (
+            prefix.text in self._last_only_prefixes
+        )
+
+    def _is_valid_suffix(self, _text: str, suffix: Token) -> bool:
         """Check if a suffix token is valid using strict pattern matching.
 
         Args:
+            text: The normalized text.
             suffix: Token to validate.
 
         Returns:
             True if the suffix is valid, False otherwise.
         """
         if self._strict:
-            return any(pattern.match(suffix.text) for pattern in self._suffixes_pattern)
+            return any(p.match(suffix.text) for p in self._suffixes_pattern)
         return True
 
-    def _update_token_offset(self, token: Token, offset: int) -> None:
+    @staticmethod
+    def _update_token_offset(token: Token, offset: int) -> None:
         """Shift token offsets by a constant amount.
 
         Args:
@@ -418,5 +447,5 @@ class NestedLawTitleTokenizer(LawTitleTokenizer):
             suffixes=suffixes,
             core=nested_token_span.core,
             normalized_text=token_span.normalized_text,
-            nested_text=nested_token_span.normalized_text,
+            nested_normalized_text=nested_token_span.normalized_text,
         )

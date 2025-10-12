@@ -88,9 +88,21 @@ class TokenSpan:
     core: Token
     normalized_text: str
     nested: bool = False
-    nested_text: str | None = None
+    nested_normalized_text: str | None = None
     prefixes: list[Token] = field(default_factory=list)
     suffixes: list[Token] = field(default_factory=list)
+
+    @property
+    def text_prefixes(self) -> list[str]:
+        return [x.text for x in self.prefixes]
+
+    @property
+    def text_suffixes(self) -> list[str]:
+        return [x.text for x in self.suffixes]
+
+    @property
+    def core_term(self) -> str:
+        return self.core.text
 
 
 @dataclass
