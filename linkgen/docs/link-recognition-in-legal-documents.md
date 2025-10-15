@@ -712,6 +712,173 @@ In both cases, the normalization process extracts Part D (Law Title) and then ap
 
 ### Validation
 
+#### Law Title Validation
+
+- [中华人民共和国商务部 - 中国法规](https://policy.mofcom.gov.cn/claw/keySearchMore.shtml)
+
+**Multi Dimensional Inverted Index**
+
+- prefix_index: 
+  - about_chinese (关于)
+  - promulgators prefixes
+  - common prefixes(such as 中华人民共和国)
+- suffix_index
+- date_index: release_date, effective_date
+  - date range search should be supported
+  - date part search should be supported(year, year + month, date and datetime)
+- version_index
+  - issue_no
+- promulgator_index
+  - promulgators metadata rather than promulgators prefixes
+- empty_prefix_index
+- empty_suffix_index
+
+
+**Law Title Simple Patterns**
+
+- [关于] + Core + [Suffix1, Suffix2, ...]
+- [Common Prefix] + [关于] + Core + [Suffix1, Suffix2, ...]
+- [Prefix1, Prefix2, ... ] + [关于] + Core + [Suffix1, Suffix2, ...]
+
+```python
+MOCK_DATA = [
+    "xxx",  # Core
+    "xxx(未知的后缀)",  # Core
+    "xxx（2021修订）",  # Core + Suffix
+    "xxx（2021修订）（征求意见）",  # Core + Suffixes
+
+    "中华人民共和国xxx",  # Common Prefix + Core
+    "中华人民共和国xxx（未知的后缀）",  # Common Prefix + Core
+    "中华人民共和国xxx（2021）",  # Common Prefix + Core + Suffix
+    "中华人民共和国xxx（2021）（征求意见）",  # Common Prefix + Core + Suffixes
+
+    "国务院xxx",  # Promulgator + Core
+    "国务院xxx（未知的后缀）",  # Promulgator + Core
+    "国务院xxx（征求意见）",  # Promulgator + Core + Suffix
+    "国务院xxx（2021）（征求意见）",  # Promulgator + Core + Suffix
+
+    "最高人民检察院 国务院xxx",  # Promulgators + Core
+    "最高人民检察院 国务院xxx（未知的后缀）",  # Promulgators + Core
+    "最高人民检察院 国务院xxx（征求意见）",  # Promulgators + Core + Suffix
+    "最高人民检察院 国务院xxx（2021）（征求意见）",  # Promulgators + Core + Suffixes
+
+    "关于xxx", # 关于 + Core
+    "关于xxx（未知的后缀）", # 关于 + Core
+    "关于xxx（2021）", # 关于 + Core + Suffix
+    "关于xxx（2021）（征求意见）", # 关于 + Core + Suffixes
+
+    "中华人民共和国关于xxx",  # Common Prefix + 关于 + Core
+    "中华人民共和国关于xxx（未知的后缀）",  # Common Prefix + 关于 + Core
+    "中华人民共和国关于xxx（2021）",  # Common Prefix + 关于 + Core + Suffix
+    "中华人民共和国关于xxx（2021）（征求意见）",  # Common Prefix + 关于 + Core + Suffixes
+
+    "国务院关于xxx",  # Promulgator + 关于 + Core
+    "国务院关于xxx（未知的后缀）",  # Promulgator + 关于 + Core
+    "国务院关于xxx（征求意见）",  # Promulgator + 关于 + Core + Suffix
+    "国务院关于xxx（2021）（征求意见）",  # Promulgator + 关于 + Core + Suffix
+
+    "最高人民检察院 国务院关于xxx",  # Promulgators + 关于 + Core
+    "最高人民检察院 国务院关于xxx（未知的后缀）",  # Promulgators + 关于 + Core
+    "最高人民检察院 国务院关于xxx（征求意见）",  # Promulgators + 关于 + Core + Suffix
+    "最高人民检察院 国务院关于xxx（2021）（征求意见）",  # Promulgators + 关于 + Core + Suffixes
+]
+
+# 章程
+MockData2 = [
+    "上海证券交易所章程",
+    "深圳证券交易所章程",
+    "中国注册会计师协会关于印发《中国注册会计师协会章程》的通知",
+    "关于发布《上海证券交易所章程》的通知",
+    "关于发布《深圳证券交易所章程》的通知",
+]
+```
+
+**Law Title Search Scenarios for Simple Title**
+
+- By prefix: 通过前缀匹配去确定一篇 "唯一" 的文档，在大多数情况下是可行的，但不能处理：
+  - 多版本法规 (such 中华人民共和国刑法（1999），中华人民共和国刑法（2003）).
+  - 没有 prefix 情况，like Core Term《章程》 will match MockData2 all items.
+
+```python
+# Core Term: xxx
+
+## Input: xxx
+Index.search("empty_prefix_index", "xxx")
++ Index.startswith("prefix_index", "中华人民共和国") 
++ Index.startswith("prefix_index", "关于")
+is None # fallback to select this if allow fuzzy match 
++ Index.search("effective_scope_index", "country")
+
+## Input: prefix[es] + xxx
+Index.search("prefix_index", prefixes) # 必须匹配内层的
+
+## Input: xxx + attrs(promulgators)
+Index.search("prefix_index", promulgators)
+
+# Input: prefix[es] + xxx + attr(promulgators)
+Index.search("prefix_index", prefixes + promulgators)
+```
+
+- By suffix: 如果通过前缀匹配存在多个版本，则应用 suffix 来进一步确定版本
+
+```python
+# Input: xxx
+All # Index.search("empty_suffix_index", "xxx")
+
+# Input: xxx + suffix[es]
+Index.search("suffix_index", suffixes)
+```
+
+- By attrs: 同样用来进一步确定版本。
+
+```python
+# attr: date
+Index.search("date_index", date)
+
+# attr: version
+Index.search("version_index", issue_no)
+
+# attr: promulgators
+Index.search("promulgator_index", promulgators)
+```
+
+- Others
+  - non-nested title should be priority match documents that are nested title.
+  - if there are still many documents, the document which is it's date closest will be selected. 
+  - if effective_scope == 'country' 才使用 nested_title_tokenizer
+
+**Law Title Search Scenarios for Nested Title**
+
+```python
+# Core Term: 关于发布《上海证券交易所章程》的通知
+```
+- the nested title only match documents that also are nested title.
+- the remain match steps are the same with non-nested title
+
+
+全国人民代表大会常务委员会关于修改《中华人民共和国统计法》的决定
+林业部关于发布《中华人民共和国陆生野生动物保护实施条例》的通知
+
+- Core + [Suffix]
+  - 民法则通
+  - 民法则通(一)
+- Common Prefix + Core + [Suffix]
+  - **中华人民共和国**民法典
+  - **中华人民共和国**民法典(2019)
+- Promulgators Prefix + Core + [Suffix]
+  - **上海市场监管局**发布市场监管章程
+  - **商业部**、**市场监管局**发布市场监管章程
+- Nested
+  - Core + [Suffix]
+    - 贵州省转发《中华人民共和国公司法》若干问题的规定(一)
+    - 贵州省就《交通条例》若干问题的规定(一)
+  - 《中华人民共和国公司法》若干问题的规定(一)
+  - 关于适用《中华人民共和国公司法》若干问题的规定(一)
+  - 最高人民法院关于适用《中华人民共和国公司法》若干问题的规定(一)
+
+
+
+
 #### Scenario 1: Core + [Suffix]
 
 - 民法则通

@@ -1,4 +1,5 @@
 import re
+from typing import Any
 
 from linkgen.structures import ReadonlyDict
 from linkgen.utils import io_util
@@ -43,3 +44,17 @@ def _init_patterns() -> ReadonlyDict[str, re.Pattern[str] | list[re.Pattern[str]
 
 # Use the readonly LookupDict
 patterns = _init_patterns()
+config: dict[str, Any] = {
+    "country_scope": "全国",
+    "forward_chinese": "转发",
+    "about_chinese": "关于",
+    "common_prefixes": ("中华人民共和国", ),
+    "ineffective_status": (
+        "尚未生效",
+        "征求意见稿或草案",
+        "To be effective",
+        "Draft for comments or Draft",
+    ),
+    "check_law_abbr_if_suffixes": ("法", ),
+    "ignore_law_abbr_if_next": ("制", "务", "令", "规", "律"),
+}
