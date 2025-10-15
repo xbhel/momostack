@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from enum import StrEnum, auto, unique
 from typing import Self
@@ -68,7 +69,7 @@ class Entity(Token):
         entity_type: EntityType,
         attrs: list[Entity] | None = None,
         refers_to: Entity | None = None,
-        alias: str | None = None
+        alias: str | None = None,
     ) -> Self:
         if attrs is None:
             attrs = []
@@ -79,7 +80,7 @@ class Entity(Token):
             entity_type=entity_type,
             attrs=attrs,
             refers_to=refers_to,
-            alias=alias
+            alias=alias,
         )
 
 
@@ -88,9 +89,10 @@ class TokenSpan:
     core: Token
     normalized_text: str
     nested: bool = False
-    nested_normalized_text: str | None = None
     prefixes: list[Token] = field(default_factory=list)
     suffixes: list[Token] = field(default_factory=list)
+    outer: TokenSpan | None = None
+    inner: TokenSpan | None = None
 
     @property
     def text_prefixes(self) -> list[str]:
@@ -104,6 +106,17 @@ class TokenSpan:
     def core_term(self) -> str:
         return self.core.text
 
+    def to_simple_json(self) -> str:
+        return json.dumps(
+            {
+                "core_term": self.core_term,
+                "prefixes": self.text_prefixes,
+                "suffixes": self.text_suffixes,
+                "nested": self.nested,
+            },
+            ensure_ascii=False,
+        )
+
 
 @dataclass
 class DocMeta:
@@ -115,10 +128,12 @@ class DocMeta:
     status: str
     created_at: int
     updated_at: int
-    release_date: str
-    effective_status: str
-    effective_date: str
-    effective_scope: str
-    issue_no: str
-    timestamp_version: int
-    promulgators: list[str]
+    release_date: int
+    version: str
+    version_timestamp: int
+    promulgators: list[str] = field(default_factory=list)
+    effective_status: str | None = None
+    effective_scope: str | None = None
+    effective_date: int | None = None
+    article_max_num: int | None = None
+    article_min_num: int | None = None

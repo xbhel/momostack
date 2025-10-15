@@ -1,8 +1,11 @@
 import html
+import json
 import re
 from collections import deque
 from collections.abc import Iterable
-from typing import Final
+from dataclasses import asdict
+from datetime import datetime, timedelta, timezone
+from typing import Any, Final
 
 from linkgen.utils import coll_util, io_util
 
@@ -201,3 +204,40 @@ def find_last_numeric_suffix(
         return "", -1
 
     return "".join(reversed(num_chars)), idx + 1
+
+
+def find_first_non_whitespace(text: str, start: int = 0, end: int | None = None) -> int:
+    """
+    Find the index of the first non-whitespace character in the given range.
+    """
+    start, end = adjust_start_end(len(text), start, end)
+    if start >= end:
+        return -1
+
+    while start < end and is_whitespace(text[start]):
+        start += 1
+    return start
+
+
+def as_shanghai_epoch_seconds(date_string: str) -> int:
+    shanghai_tz = timezone(timedelta(hours=8))
+    return int(
+        datetime.strptime(date_string, "%Y-%m-%d")
+        .replace(tzinfo=shanghai_tz)
+        .timestamp()
+    )
+
+
+def as_shanghai_datetime(epoch_seconds: int) -> datetime:
+    shanghai_tz = timezone(timedelta(hours=8))
+    return datetime.fromtimestamp(epoch_seconds, shanghai_tz)
+
+
+def unpack_date(epoch_seconds: int) -> tuple[int, int, int]:
+    datetime_ = as_shanghai_datetime(epoch_seconds)
+    return datetime_.year, datetime_.month, datetime_.day
+
+
+def dataclass2json(dataclass: Any) -> str:
+    return json.dumps(asdict(dataclass), ensure_ascii=False)
+

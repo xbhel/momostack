@@ -16,7 +16,7 @@ except NameError:
 def load_resource_json(relative_path: str) -> Any:
     normal_path = os.path.normpath(f"../resources/{relative_path}")
     real_path = os.path.join(WORKING_DIR, normal_path)
-    with open(real_path, encoding='utf-8') as f:
+    with open(real_path, encoding="utf-8") as f:
         try:
             return json.loads(f.read())
         except json.JSONDecodeError as e:

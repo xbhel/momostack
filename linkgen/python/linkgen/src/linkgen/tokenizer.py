@@ -16,7 +16,7 @@ from abc import ABC, abstractmethod
 from itertools import chain
 from typing import TYPE_CHECKING, Final, cast, override
 
-from linkgen.config import patterns
+from linkgen.config import config, patterns
 from linkgen.helper import KeywordExtractor, PairedSymbolExtractor
 from linkgen.models import Token, TokenSpan
 from linkgen.utils import text_util
@@ -25,8 +25,9 @@ if TYPE_CHECKING:
     import re
     from collections.abc import Iterable
 
-_FORWARD_CHINESE: Final = "转发"
-_ABOUT_CHINESE: Final = "关于"
+
+_FORWARD_CHINESE: Final = config["forward_chinese"]
+_ABOUT_CHINESE: Final = config["about_chinese"]
 
 
 class Tokenizer(ABC):
@@ -368,10 +369,12 @@ class NestedLawTitleTokenizer(LawTitleTokenizer):
         Returns:
             Tuple of (offset, nested_text) or (-1, None) if no match.
         """
-        # Skip if text contains forward marker or no pattern match
-        if text.find(_FORWARD_CHINESE) != -1 or (
-            (matcher := self._nested_title_pattern.match(text)) is None
-        ):
+        # Skip if text contains forward marker
+        if text.find(_FORWARD_CHINESE) != -1:
+            return -1, None
+
+        # Try to match the nested title pattern
+        if (matcher := self._nested_title_pattern.match(text)) is None:
             return -1, None
 
         # Additional strict validation for core text format
@@ -447,5 +450,39 @@ class NestedLawTitleTokenizer(LawTitleTokenizer):
             suffixes=suffixes,
             core=nested_token_span.core,
             normalized_text=token_span.normalized_text,
-            nested_normalized_text=nested_token_span.normalized_text,
+            outer=token_span,
+            inner=nested_token_span,
+        )
+
+
+class NoOpTokenizer(Tokenizer):
+    """
+    A Tokenizer implementation that performs no tokenization.
+
+    Return the entire normalized input text as a single core token without
+    prefixes or suffixes.
+
+    Example::
+        tokenizer = NoOpTokenizer()
+        result = tokenizer.tokenize("中华人民共和国民法典（2020年）")
+        # result: TokenSpan(
+        #     normalized_text="中华人民共和国民法典(2020年)",
+        #     prefixes=[],
+        #     suffixes=[],
+        #     core=Token(text="中华人民共和国民法典(2020年)", start=0, end=21),
+        # )
+    """  # noqa: RUF002
+
+    def tokenize(self, text: str) -> TokenSpan:
+        if not text or not text.strip():
+            raise ValueError("Input text cannot be empty")
+
+        normalized_text = text_util.remove_all_whitespaces(
+            text_util.to_ascii(text_util.unescape_html_entities(text))
+        )
+        return TokenSpan(
+            prefixes=[],
+            suffixes=[],
+            normalized_text=normalized_text,
+            core=Token(text, 0, len(normalized_text)),
         )

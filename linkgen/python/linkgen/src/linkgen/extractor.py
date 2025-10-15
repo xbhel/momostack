@@ -5,7 +5,7 @@ from typing import Any, Final, override
 
 import cn2an  # type: ignore[import-untyped]
 
-from linkgen.config import patterns
+from linkgen.config import config, patterns
 from linkgen.helper import (
     Extractor,
     KeywordExtractor,
@@ -179,6 +179,10 @@ class DynamicKeywordEntityExtractor(Extractor):
     """
 
     _KEYWORD_MAPPING: Final = io_util.load_resource_json("KeywordMapping.json")
+    _check_law_abbr_if_suffixes: tuple[str] = tuple(
+        config["check_law_abbr_if_suffixes"]
+    )
+    _ignore_law_abbr_if_next: tuple[str] = tuple(config["ignore_law_abbr_if_next"])
 
     _default_keyword_lookup = {
         k: type_ for type_, kws in _KEYWORD_MAPPING.items() for k in kws
@@ -219,13 +223,16 @@ class DynamicKeywordEntityExtractor(Extractor):
                 entity_type = value.entity_type
             else:
                 entity_type = EntityType.__members__.get(value.upper())
+                # Exclude EXCLUDED entities
                 if entity_type is None:
                     logger.debug(
                         "Ignored unrecognized entity type %r for %r", value, segment
                     )
                     continue
 
-            yield Entity.of(segment, entity_type, refers_to=abbr_def)
+            entity = Entity.of(segment, entity_type, refers_to=abbr_def)
+            if self._is_valid_keyword(text, entity):
+                yield entity
 
     def _rebuild_lookup_and_extractor(self, dynamic_abbr_defs: list[Entity]) -> None:
         # Build a reverse mapping from keyword to label/entity
@@ -236,6 +243,22 @@ class DynamicKeywordEntityExtractor(Extractor):
         self._extractor = KeywordExtractor(
             keywords=self._keyword_lookup.keys(), ignore_overlaps=True
         )
+
+    def _is_valid_keyword(self, text: str, entity: Entity) -> bool:
+        abbr_types = {EntityType.LAW_ABBR, EntityType.LAW_DYNAMIC_ABBR}
+        if entity.entity_type in abbr_types and entity.text.endswith(
+            self._check_law_abbr_if_suffixes
+        ):
+            idx = text_util.find_first_non_whitespace(text, entity.end, len(text))
+            if text.startswith(self._ignore_law_abbr_if_next, idx):
+                logger.debug(
+                    "Ignored %r %r with invalid next character: %r",
+                    entity.entity_type.name,
+                    entity.text,
+                    text[idx],
+                )
+                return False
+        return True
 
 
 class PatternEntityExtractor(Extractor):

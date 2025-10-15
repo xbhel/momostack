@@ -7,6 +7,7 @@ with improved type safety, error handling, and convenience methods.
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterator
 from typing import TYPE_CHECKING, Any, Unpack
 
 import boto3
@@ -14,7 +15,7 @@ from boto3.dynamodb.types import TypeDeserializer, TypeSerializer
 from botocore.config import Config
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
+    from collections.abc import Iterator
 
     from mypy_boto3_dynamodb.client import DynamoDBClient
     from mypy_boto3_dynamodb.type_defs import QueryInputPaginateTypeDef
@@ -54,7 +55,7 @@ class DynamoDBWrapper:
 
     def query(
         self, **kwargs: Unpack[QueryInputPaginateTypeDef]
-    ) -> Generator[dict[str, Any], None, None]:
+    ) -> Iterator[dict[str, Any]]:
         paginator = self._client.get_paginator("query")
         response_iterator = paginator.paginate(**kwargs)
         for page in response_iterator:
