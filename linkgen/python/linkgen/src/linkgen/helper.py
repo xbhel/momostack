@@ -94,7 +94,7 @@ class PairedSymbolExtractor(Extractor):
                 continue
 
             left_index, _ = stack.pop()
-            yield self._make_value(text, left_index, index + 1)
+            yield self._make_value(text, left_index, index + len(self._right))
 
     def _extract_outermost(self, text: str) -> Iterable[Token]:
         depth = 0
@@ -112,7 +112,7 @@ class PairedSymbolExtractor(Extractor):
                 continue
 
             left_index, _ = stack.pop()
-            item = self._make_value(text, left_index, index + 1)
+            item = self._make_value(text, left_index, index + len(self._right))
             if not stack:
                 yield item
             else:
@@ -147,15 +147,13 @@ class PairedSymbolExtractor(Extractor):
 
             left_index, _ = stack.pop()
             if depth == max_depth_seen:
-                yield self._make_value(text, left_index, index + 1)
+                yield self._make_value(text, left_index, index + len(self._right))
 
             depth -= 1
             if depth == 0:
                 max_depth_seen = 0
 
-    def _get_strategy_handler(
-        self, strategy: str
-    ) -> Callable[[str], Iterable[Token]]:
+    def _get_strategy_handler(self, strategy: str) -> Callable[[str], Iterable[Token]]:
         if strategy == "innermost":
             return self._extract_innermost
         if strategy == "outermost":

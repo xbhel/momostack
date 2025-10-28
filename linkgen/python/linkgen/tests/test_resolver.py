@@ -12,7 +12,26 @@ from linkgen.resolver import (
     _skip_leading_whitespace,
     _skip_whitespace_and_tags,
 )
-from linkgen.models import Entity, EntityType
+from linkgen.models import Entity, EntityType, DocMeta
+
+
+TEST_METADATA = DocMeta(
+    doc_id="law_001",
+    doc_type="Legislation",
+    doc_url="https://example.com/law_001",
+    title="深圳证券交易所章程",
+    core_term="章程",
+    status="1",
+    created_at=1641081600,
+    updated_at=1641081600,
+    release_date=662659200,
+    version="",
+    version_timestamp=1641081600,
+    promulgators=[],
+    effective_status="",
+    effective_scope="",
+    effective_date=662659200,
+)
 
 
 class TestAssociate(unittest.TestCase):
@@ -20,14 +39,14 @@ class TestAssociate(unittest.TestCase):
 
     def test_empty_entities_returns_unchanged(self):
         """Test that empty entities list returns unchanged."""
-        _associate_entities("test text", [])
+        _associate_entities("test text", [], TEST_METADATA)
         # Function modifies entities in-place and returns None
 
     def test_valid_entities_processed(self):
         """Test that valid entities are processed correctly."""
         text = "Some law (2023)"
         entities = [Entity("Some law", 0, 8, EntityType.LAW_TITLE)]
-        _associate_entities(text, entities)
+        _associate_entities(text, entities, TEST_METADATA)
         # Function modifies entities in-place and returns None
 
     def test_entities_with_dependencies_processed(self):
@@ -37,7 +56,7 @@ class TestAssociate(unittest.TestCase):
         date = Entity("2023", 11, 15, EntityType.DATE)
         entities = [law_title, date]
 
-        _associate_entities(text, entities)
+        _associate_entities(text, entities, TEST_METADATA)
         # The law title should have the date as an attribute
         self.assertIsNotNone(law_title.attrs)
         self.assertIn(date, law_title.attrs)
@@ -144,15 +163,17 @@ class TestAssociateReferencesForDynamicAbbr(unittest.TestCase):
         text = "Law Title (Abbr) Abbr"
         law_title = Entity("Law Title", 0, 9, EntityType.LAW_TITLE)
         abbr_def = Entity("Abbr", 11, 15, EntityType.LAW_DYNAMIC_ABBR)
-        
+
         abbr_ref1 = Entity("Abbr", 11, 15, EntityType.LAW_DYNAMIC_ABBR)
         abbr_ref2 = Entity("Abbr", 17, 21, EntityType.LAW_DYNAMIC_ABBR)
-        
+
         # Set up the existing reference
         abbr_ref1.refers_to = abbr_def
         abbr_ref2.refers_to = abbr_def
 
-        _associate_ref_defs_for_dynamic_abbr(text, [abbr_ref1, abbr_ref2], iter([law_title]))
+        _associate_ref_defs_for_dynamic_abbr(
+            text, [abbr_ref1, abbr_ref2], iter([law_title])
+        )
 
         # The abbreviation should now refer to the law title
         self.assertEqual(abbr_ref1.refers_to, law_title)
@@ -166,7 +187,9 @@ class TestAssociateReferencesForDynamicAbbr(unittest.TestCase):
 
         with self.assertRaises(ValueError) as context:
             _associate_ref_defs_for_dynamic_abbr(text, [abbr_ref], iter([]))
-        self.assertIn("Missing definition for dynamic abbreviation", str(context.exception))
+        self.assertIn(
+            "Missing definition for dynamic abbreviation", str(context.exception)
+        )
 
 
 class TestHelperFunctions(unittest.TestCase):
@@ -267,7 +290,7 @@ class TestCompleteWorkflow(unittest.TestCase):
         entities = [civil_code, criminal_law, date_2020, date_2019]
 
         # Process associations
-        _associate_entities(text, entities)
+        _associate_entities(text, entities, TEST_METADATA)
 
         # Civil Code should have 2020 date
         self.assertIsNotNone(civil_code.attrs)
@@ -283,14 +306,16 @@ class TestCompleteWorkflow(unittest.TestCase):
 
         # Create entities
         supreme_court = Entity("Supreme Court", 0, 13, EntityType.PROMULGATOR)
-        judicial_committee = Entity("Judicial Committee", 15, 32, EntityType.PROMULGATOR)
+        judicial_committee = Entity(
+            "Judicial Committee", 15, 32, EntityType.PROMULGATOR
+        )
         civil_code = Entity("Civil Code", 35, 45, EntityType.LAW_TITLE)
         date = Entity("2020", 47, 51, EntityType.DATE)
 
         entities = [supreme_court, judicial_committee, civil_code, date]
 
         # Process associations
-        _associate_entities(text, entities)
+        _associate_entities(text, entities, TEST_METADATA)
 
         # Civil Code should have the date
         self.assertIsNotNone(civil_code.attrs)
@@ -308,10 +333,17 @@ class TestCompleteWorkflow(unittest.TestCase):
         admin_law = Entity("Administrative Law", 40, 58, EntityType.LAW_TITLE)
         date_2021 = Entity("2021", 60, 64, EntityType.DATE)
 
-        entities = [civil_code, date_2020, criminal_law, date_2019, admin_law, date_2021]
+        entities = [
+            civil_code,
+            date_2020,
+            criminal_law,
+            date_2019,
+            admin_law,
+            date_2021,
+        ]
 
         # Process associations
-        _associate_entities(text, entities)
+        _associate_entities(text, entities, TEST_METADATA)
 
         # Each law should have its corresponding date
         self.assertIn(date_2020, civil_code.attrs)
@@ -325,7 +357,7 @@ class TestEdgeCases(unittest.TestCase):
     def test_empty_text(self):
         """Test association with empty text."""
         entities: list[Entity] = []
-        _associate_entities("", entities)
+        _associate_entities("", entities, TEST_METADATA)
         # Function modifies entities in-place and returns None
 
     def test_single_entity(self):
@@ -334,7 +366,7 @@ class TestEdgeCases(unittest.TestCase):
         law_title = Entity("Law Title", 0, 9, EntityType.LAW_TITLE)
         entities = [law_title]
 
-        _associate_entities(text, entities)
+        _associate_entities(text, entities, TEST_METADATA)
         # No attributes should be added
         self.assertEqual(len(law_title.attrs), 0)
 
@@ -344,7 +376,7 @@ class TestEdgeCases(unittest.TestCase):
         entity = Entity("Some text", 0, 9, EntityType.DATE)
         entities = [entity]
 
-        _associate_entities(text, entities)
+        _associate_entities(text, entities, TEST_METADATA)
         # No changes should occur
         self.assertEqual(len(entity.attrs), 0)
 
@@ -355,7 +387,7 @@ class TestEdgeCases(unittest.TestCase):
         date = Entity("2020", 10002, 10006, EntityType.DATE)
         entities = [law_title, date]
 
-        _associate_entities(long_text, entities)
+        _associate_entities(long_text, entities, TEST_METADATA)
         self.assertIn(date, law_title.attrs)
 
     def test_unicode_content(self):
@@ -365,7 +397,7 @@ class TestEdgeCases(unittest.TestCase):
         date = Entity("2020年", 4, 9, EntityType.DATE)
         entities = [law_title, date]
 
-        _associate_entities(text, entities)
+        _associate_entities(text, entities, TEST_METADATA)
         self.assertIn(date, law_title.attrs)
 
     def test_mixed_bracket_types(self):
@@ -377,7 +409,7 @@ class TestEdgeCases(unittest.TestCase):
         date2 = Entity("2021", 32, 36, EntityType.DATE)
         entities = [law_title1, date1, law_title2, date2]
 
-        _associate_entities(text, entities)
+        _associate_entities(text, entities, TEST_METADATA)
         self.assertIn(date1, law_title1.attrs)
         self.assertIn(date2, law_title2.attrs)
 

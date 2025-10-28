@@ -40,6 +40,8 @@
 
 ## Deep Learning
 
+- https://github.com/dair-ai/ML-YouTube-Courses
+
 
 ## MCP
 
@@ -75,6 +77,7 @@ Checkout [awesome-mcp-clients](https://github.com/punkpeye/awesome-mcp-clients/)
 - https://openai.github.io/openai-agents-python/agents/
 - https://github.com/openai/openai-agents-python?tab=readme-ov-file
 - https://github.com/ComposioHQ/composio/tree/next
+- https://github.com/microsoft/ai-agents-for-beginners
 
 ## Resources
 

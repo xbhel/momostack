@@ -12,8 +12,8 @@ from linkgen.helper import (
     PairedSymbolExtractor,
     PatternExtractor,
 )
-from linkgen.models import Entity, EntityType
-from linkgen.utils import coll_util, io_util, text_util
+from linkgen.models import DocMeta, Entity, EntityType
+from linkgen.utils import coll_util, text_util
 
 __author__ = "xbhel"
 __email__ = "xbhel@outlook.com"
@@ -22,7 +22,14 @@ logger = logging.getLogger(__name__)
 logger.setLevel(os.getenv("LOG_LEVEL", logging.DEBUG))
 
 
-class CaseNoExtractor(Extractor):
+class EntityExtractor(Extractor):
+
+    @override
+    def extract(self, text: str) -> Iterator[Entity]:
+        raise NotImplementedError
+
+
+class CaseNoExtractor(EntityExtractor):
     """Extractor for case numbers.
 
     This extractor identifies single or comma-like separated case numbers and
@@ -106,7 +113,7 @@ class CaseNoExtractor(Extractor):
             offset = offset + len(part) + 1
 
 
-class LawArticleExtractor(Extractor):
+class LawArticleExtractor(EntityExtractor):
     """Extractor for law article references.
 
     Supports single and comma-like separated article mentions and yields one
@@ -170,7 +177,7 @@ class LawArticleExtractor(Extractor):
             return None
 
 
-class DynamicKeywordEntityExtractor(Extractor):
+class DynamicKeywordEntityExtractor(EntityExtractor):
     """Extract entities based on keyword mappings, including dynamic entries.
 
     Uses a keyword→type lookup built from a static resource and optionally
@@ -178,18 +185,16 @@ class DynamicKeywordEntityExtractor(Extractor):
     text. Dynamic entries map the keyword directly to the defining `Entity`.
     """
 
-    _KEYWORD_MAPPING: Final = io_util.load_resource_json("KeywordMapping.json")
-    _check_law_abbr_if_suffixes: tuple[str] = tuple(
-        config["check_law_abbr_if_suffixes"]
-    )
-    _ignore_law_abbr_if_next: tuple[str] = tuple(config["ignore_law_abbr_if_next"])
-
-    _default_keyword_lookup = {
-        k: type_ for type_, kws in _KEYWORD_MAPPING.items() for k in kws
+    _default_keyword_lookup: dict[str, str] = {
+        **{k: type_ for type_, kws in config["keyword_mapping"].items() for k in kws},
+        **dict.fromkeys(config["law_abbr_mapping"], EntityType.LAW_ABBR.name),
+        **dict.fromkeys(config["promulgator_mapping"], EntityType.PROMULGATOR.name),
     }
     _default_extractor = KeywordExtractor(
         keywords=_default_keyword_lookup.keys(), ignore_overlaps=True
     )
+    _check_abbr_if_suffixes: tuple[str] = tuple(config["check_abbr_if_suffixes"])
+    _ignore_abbr_if_next: tuple[str] = tuple(config["ignore_abbr_if_next_prefixes"])
 
     def __init__(self, dynamic_abbr_defs: list[Entity]) -> None:
         self._extractor = self._default_extractor
@@ -223,7 +228,7 @@ class DynamicKeywordEntityExtractor(Extractor):
                 entity_type = value.entity_type
             else:
                 entity_type = EntityType.__members__.get(value.upper())
-                # Exclude EXCLUDED entities
+                # Ignore EXCLUDED entities
                 if entity_type is None:
                     logger.debug(
                         "Ignored unrecognized entity type %r for %r", value, segment
@@ -247,21 +252,20 @@ class DynamicKeywordEntityExtractor(Extractor):
     def _is_valid_keyword(self, text: str, entity: Entity) -> bool:
         abbr_types = {EntityType.LAW_ABBR, EntityType.LAW_DYNAMIC_ABBR}
         if entity.entity_type in abbr_types and entity.text.endswith(
-            self._check_law_abbr_if_suffixes
+            self._check_abbr_if_suffixes
         ):
             idx = text_util.find_first_non_whitespace(text, entity.end, len(text))
-            if text.startswith(self._ignore_law_abbr_if_next, idx):
+            if text.startswith(self._ignore_abbr_if_next, idx):
                 logger.debug(
-                    "Ignored %r %r with invalid next character: %r",
+                    "Ignored %r %r with invalid next prefix.",
                     entity.entity_type.name,
                     entity.text,
-                    text[idx],
                 )
                 return False
         return True
 
 
-class PatternEntityExtractor(Extractor):
+class PatternEntityExtractor(EntityExtractor):
     """Extract entities via simple, stateless pattern extractors.
 
     Currently extracts:
@@ -273,6 +277,12 @@ class PatternEntityExtractor(Extractor):
         EntityType.DATE: PatternExtractor(patterns["date"]),
         EntityType.LAW_TITLE: PairedSymbolExtractor(
             symbol_pair=("《", "》"),
+            include_symbols=False,
+            strategy="outermost",
+            allow_fallback_on_unclosed=True,
+        ),
+        EntityType.LINK: PairedSymbolExtractor(
+            symbol_pair=("<a", "</a>"),
             include_symbols=False,
             strategy="outermost",
             allow_fallback_on_unclosed=True,
@@ -293,7 +303,7 @@ class PatternEntityExtractor(Extractor):
             )
 
 
-class BracketEntityExtractor(Extractor):
+class BracketEntityExtractor(EntityExtractor):
     """Extract entities appearing inside paired brackets.
 
     Handles content within bracketed segments and applies specialized
@@ -337,7 +347,7 @@ _PATTERN_ENTITY_EXTRACTOR: Final = PatternEntityExtractor()
 _BRACKET_ENTITY_EXTRACTOR: Final = BracketEntityExtractor()
 
 
-def extract_entities(text: str) -> Iterator[Entity]:
+def extract(text: str, metadata: DocMeta) -> Iterator[Entity]:
     """Yield all entities found in the text.
 
     Extraction order:
@@ -348,20 +358,22 @@ def extract_entities(text: str) -> Iterator[Entity]:
     5) Keyword-based entities (promulgator, law_abbr, including dynamic abbreviations)
     6) Bracketed entities (yielded at the end)
     """
-
+    logger.info("Extracting entities for document: %s", metadata.doc_id)
     # Extract entities within paired brackets (e.g., Issue No, Law Abbreviation)
     bracket_entities = list(_BRACKET_ENTITY_EXTRACTOR.extract(text))
     dynamic_abbr_defs = coll_util.remove_if(
         bracket_entities, key=lambda x: x.entity_type == EntityType.LAW_DYNAMIC_ABBR
     )
 
-    extractors = (
-        _CASE_NO_EXTRACTOR,
+    extractors: list[EntityExtractor] = [
         _ARTICLE_EXTRACTOR,
         _PATTERN_ENTITY_EXTRACTOR,
         # Extract keyword-based entities using abbreviations found in brackets
         DynamicKeywordEntityExtractor(dynamic_abbr_defs),
-    )
+    ]
+
+    if metadata.doc_type == "Case":
+        extractors.append(_CASE_NO_EXTRACTOR)
 
     # yield all entities, with earlier ones taking precedence.
     for extractor in extractors:

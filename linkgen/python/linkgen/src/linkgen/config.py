@@ -12,7 +12,9 @@ def _compile(pattern: str) -> re.Pattern[str]:
         raise ValueError(f"Failed to compile regex pattern '{pattern}': {e}") from e
 
 
-def _init_patterns() -> ReadonlyDict[str, re.Pattern[str] | list[re.Pattern[str]]]:
+def _precompile_patterns(
+    pattern_mapping: dict[str, str | list[str]],
+) -> ReadonlyDict[str, re.Pattern[str] | list[re.Pattern[str]]]:
     """
     Load and compile regex patterns from Pattern.json.
     Returns:
@@ -22,10 +24,9 @@ def _init_patterns() -> ReadonlyDict[str, re.Pattern[str] | list[re.Pattern[str]
         ValueError: If a pattern entry is empty.
         TypeError: If a pattern entry is not a string or list of strings.
     """
-    conf = io_util.load_resource_json("PatternMapping.json")
     mapping: dict[str, re.Pattern[str] | list[re.Pattern[str]]] = {}
 
-    for name, values in conf.items():
+    for name, values in pattern_mapping.items():
         if not values:
             raise ValueError(f"Pattern '{name}' is empty.")
         if isinstance(values, list):
@@ -42,19 +43,22 @@ def _init_patterns() -> ReadonlyDict[str, re.Pattern[str] | list[re.Pattern[str]
     return ReadonlyDict(mapping)
 
 
+def _parse_config() -> ReadonlyDict[str, Any]:
+    """
+    Load and parse the config.toml file.
+    """
+    conf = io_util.load_resource_toml("config.toml")
+
+    # load mapping files
+    mapping_files: list[str] = conf["mapping"]["files"]
+    for file in mapping_files:
+        mapping = io_util.load_resource_json(file)
+        key = file.removesuffix(".json")
+        conf[key] = mapping
+
+    return ReadonlyDict(conf)
+
+
 # Use the readonly LookupDict
-patterns = _init_patterns()
-config: dict[str, Any] = {
-    "country_scope": "全国",
-    "forward_chinese": "转发",
-    "about_chinese": "关于",
-    "common_prefixes": ("中华人民共和国", ),
-    "ineffective_status": (
-        "尚未生效",
-        "征求意见稿或草案",
-        "To be effective",
-        "Draft for comments or Draft",
-    ),
-    "check_law_abbr_if_suffixes": ("法", ),
-    "ignore_law_abbr_if_next": ("制", "务", "令", "规", "律"),
-}
+config = _parse_config()
+patterns = _precompile_patterns(config["pattern_mapping"])

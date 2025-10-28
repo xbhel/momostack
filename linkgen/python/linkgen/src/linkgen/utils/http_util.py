@@ -8,8 +8,8 @@ from linkgen.exceptions import RetryableException
 
 
 class HttpClient:
-    _instance: ClassVar[HttpClient]
-    _pool: ClassVar[PoolManager]
+    _instance: ClassVar[HttpClient] = None  # type: ignore[assignment]
+    _pool: ClassVar[PoolManager] = None  # type: ignore[assignment]
     _default_retry_policy = Retry(
         total=5,
         backoff_factor=0.5,

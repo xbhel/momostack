@@ -10,7 +10,7 @@ from typing import Any, Final
 from linkgen.utils import coll_util, io_util
 
 _WHITESPACE_REGEX: Final = re.compile(r"\s+", re.UNICODE)
-_ASCII_MAPPING_TABLE: dict[str, str] = io_util.load_resource_json("AsciiMapping.json")
+_ASCII_MAPPING_TABLE: dict[str, str] = io_util.load_resource_json("ascii_mapping.json")
 _ASCII_TRANS_TABLE: Final = {ord(k): v for k, v in _ASCII_MAPPING_TABLE.items()}
 _ASCII_TO_VARIANTS: Final = coll_util.reverse_dict(_ASCII_MAPPING_TABLE)
 
@@ -241,3 +241,7 @@ def unpack_date(epoch_seconds: int) -> tuple[int, int, int]:
 def dataclass2json(dataclass: Any) -> str:
     return json.dumps(asdict(dataclass), ensure_ascii=False)
 
+
+def strip_bookmarks(text: str) -> str:
+    bookmarks = get_equivalents(">") | get_equivalents("<")
+    return text.strip("".join(bookmarks))

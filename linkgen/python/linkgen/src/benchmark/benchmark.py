@@ -20,6 +20,7 @@ from typing import Any, Final
 
 import psutil
 
+from linkgen.models import DocMeta
 from linkgen.utils import io_util
 
 # Configure logging
@@ -324,11 +325,28 @@ def main() -> None:
             sys.exit(1)
 
     if func_to_benchmark is None:
-        from linkgen.extractor import extract_entities
-        from linkgen.resolver import resolve_entities
+        from linkgen.extractor import extract
+        from linkgen.resolver import resolve
 
         def f(text: str) -> Any:
-            resolve_entities(text, extract_entities(text))
+            metadata = DocMeta(
+                doc_id="law_001",
+                doc_type="Legislation",
+                doc_url="https://example.com/law_001",
+                title="深圳证券交易所章程",
+                core_term="章程",
+                status="1",
+                created_at=1641081600,
+                updated_at=1641081600,
+                release_date=662659200,
+                version="",
+                version_timestamp=1641081600,
+                promulgators=[],
+                effective_status="",
+                effective_scope="",
+                effective_date=662659200,
+            )
+            return resolve(text, extract(text, metadata), metadata)
 
         func_to_benchmark = f
 
