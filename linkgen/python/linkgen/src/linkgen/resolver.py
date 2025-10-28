@@ -1,57 +1,78 @@
+import logging
+import os
 import xml.etree.ElementTree as ET
 from collections.abc import Callable, Generator, Iterable, Iterator
 from itertools import chain
 from typing import Any, Final
 
+from linkgen.config import config
 from linkgen.helper import resolve_overlaps
-from linkgen.models import Entity, EntityType
+from linkgen.models import DocMeta, Entity, EntityType
 from linkgen.structures import LookupDict
 from linkgen.utils import coll_util, text_util
 
-_LEFT_BRACKETS: Final = {"(", "（"}  # noqa: RUF001
-_SENTENCE_ENDING: Final = {"?", "!", ".", "。", "？", "！"}  # noqa: RUF001
+__author__ = "xbhel"
+__email__ = "xbhel@outlook.com"
+
+logger = logging.getLogger(__name__)
+logger.setLevel(os.getenv("LOG_LEVEL", logging.DEBUG))
 
 
-def resolve_entities(text: str, entities_it: Iterator[Entity]) -> list[Entity]:
+_LEFT_BRACKETS: Final[tuple[str, ...]] = tuple(config["left_brackets"])
+_SENTENCE_ENDING: Final[tuple[str, ...]] = tuple(config["sentence_ending"])
+
+
+def resolve(
+    text: str, entities_it: Iterator[Entity], metadata: DocMeta
+) -> list[Entity]:
+    logger.info("Resolving entities dependencies for document: %s", metadata.doc_id)
     # Post-process to filter out invalid entities
-    entities_it = _validate_entities(text, entities_it)
+    entities_it = _validate_entities(text, entities_it, metadata)
 
     # If two entities have the same (start, end), the first one will remain,
     # so the earlier position has higher priority.
     entity_list = resolve_overlaps(entities_it, strategy="longest", direct_only=True)
 
-    _associate_entities(text, entity_list)
+    _associate_entities(text, entity_list, metadata)
     return _remove_orphan_entities(entity_list)
 
 
 def _validate_entities(
-    text: str, entities: Iterable[Entity]
+    text: str, entities: Iterable[Entity], metadata: DocMeta
 ) -> Generator[Entity, Any, None]:
     """
     Valid entity text is a valid XML fragment without unclosed tags
     """
-    validations: tuple[Callable[[str, Entity], bool], ...] = (
-        _is_unmarked_hyperlink,
+    validations: tuple[Callable[[str, Entity, DocMeta], bool], ...] = (
+        # The check is no longer needed because `resolve_overlaps`
+        # with strategy="longest" will ensure that no nested links are created.
+        # _is_unmarked_hyperlink,
         _is_valid_xml_fragment,
+        _is_not_article_definition,
+        _is_law_not_from_current_title,
     )
-    yield from (x for x in entities if all(v(text, x) for v in validations))
+    yield from (x for x in entities if all(v(text, x, metadata) for v in validations))
 
 
-def _associate_entities(text: str, entities: list[Entity]) -> None:
+def _associate_entities(text: str, entities: list[Entity], metadata: DocMeta) -> None:
     """
     Associate entities with their attributes based on entity type dependencies.
     """
     if not entities:
         return
 
+    # Special handling for LAW_SELF in non-legislation documents
+    if metadata.doc_type != "Legislation":
+        for entity in entities:
+            if entity.entity_type == EntityType.LAW_SELF:
+                entity.entity_type = EntityType.THIS_LAW
+
     associators = {
         EntityType.LAW_TITLE: _associate_attributes,
-        EntityType.LAW_SELF: _associate_ref_definitions,
         EntityType.THIS_LAW: _associate_ref_definitions,
         EntityType.LAW_ARTICLE: _associate_ref_definitions,
         EntityType.LAW_DYNAMIC_ABBR: _associate_ref_defs_for_dynamic_abbr,
     }
-
     entities_by_type = coll_util.group_by(entities, key=lambda x: x.entity_type)
 
     for entity_type, group in entities_by_type.items():
@@ -68,6 +89,7 @@ def _remove_orphan_entities(entities: Iterable[Entity]) -> list[Entity]:
     LAW_TITLE, CASE_NO and LAW_ABBR are allowed to exist independently.
     """
     remaining_types = {
+        EntityType.LINK,
         EntityType.CASE_NO,
         EntityType.LAW_ABBR,
         EntityType.LAW_SELF,
@@ -148,15 +170,18 @@ def _associate_attributes(
             entity.attrs.append(attr)
 
 
-def _is_valid_xml_fragment(document: str, segment: Entity) -> bool:
+def _is_valid_xml_fragment(document: str, entity: Entity, _metadata: DocMeta) -> bool:
     """
     Check whether a text segment is a valid XML fragment.
     """
-    text = text_util.unescape_html_entities(segment.text)
+    if entity.entity_type == EntityType.LINK:
+        return True
+
+    text = text_util.unescape_html_entities(entity.text)
 
     # inside attribute value(e.g., <tag attr="...">)
-    last_open = document.rfind("<", 0, segment.start)
-    last_close = document.rfind(">", 0, segment.start)
+    last_open = document.rfind("<", 0, entity.start)
+    last_close = document.rfind(">", 0, entity.start)
     if last_open != -1 and last_close < last_open:
         return False
 
@@ -169,15 +194,44 @@ def _is_valid_xml_fragment(document: str, segment: Entity) -> bool:
     return True
 
 
-def _is_unmarked_hyperlink(document: str, segment: Entity) -> bool:
+def _is_unmarked_hyperlink(document: str, entity: Entity, _metadata: DocMeta) -> bool:
     """
     Check whether a text segment is already marked with an <a> tag.
     """
-    last_open = document.rfind("<a", 0, segment.start)
+    last_open = document.rfind("<a", 0, entity.start)
     if last_open == -1:
         return True
-    last_close = document.rfind("</a>", 0, segment.start)
+    last_close = document.rfind("</a>", 0, entity.start)
     return last_close != -1 and last_close > last_open
+
+
+def _is_not_article_definition(
+    document: str, entity: Entity, metadata: DocMeta
+) -> bool:
+    if (
+        entity.entity_type != EntityType.LAW_ARTICLE
+        or metadata.doc_type != "Legislation"
+    ):
+        return True
+    # Check if the article number definition appears before its mention
+    return (
+        document.rfind(f"_art_{entity.alias}", entity.start - 200, entity.start) == -1
+    )
+
+
+def _is_law_not_from_current_title(
+    document: str, entity: Entity, metadata: DocMeta
+) -> bool:
+    if entity.entity_type not in {EntityType.LAW_ABBR, EntityType.LAW_TITLE}:
+        return True
+
+    idx = metadata.title.find(entity.text)
+    if idx == -1:
+        return True
+    return (
+        document[entity.start - idx : entity.start + len(metadata.title) - idx]
+        != metadata.title
+    )
 
 
 def _without_sentence_ending(text: str, start: int, end: int) -> bool:

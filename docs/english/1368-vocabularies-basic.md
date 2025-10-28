@@ -1,4 +1,4 @@
-**## Intro
+## Intro
 
 ### Pick the bigger one
 
@@ -224,3 +224,5 @@ bad 不只是坏的意思。
 
 - augment
 - boilerplate
+- preemptive
+- mutual

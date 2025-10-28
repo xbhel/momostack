@@ -14,6 +14,7 @@ Even if you meet with some difficulties or frustrations, just take them in your 
 - equate sth with sth 把...等同/当作...
     - Many people equate wealth/money with happiness.
     - regard sth as sth 把...等同/当作...
+    - take sth as sth 
 - some ~~equate it~~ with wealth and still some ~~equate it~~ with accomplishments (省略了 equate it)
 - fulfill one's dreams 实现某人的梦想
     - realize/achieve/ one's dreams
@@ -52,7 +53,7 @@ Even if you meet with some difficulties or frustrations, just take them in your 
 
 ## Learning: a Lifelong Career
 
-As food is to the body, so is learning to the mind. Our bodies grow and muscles develop with the intake of food. Likewise, we should keep learning day by day to maintain our mental power and expand our intellectual capacity.
+**As food is to the body, so is learning to the mind.** Our bodies grow and muscles develop with the intake of food. Likewise, we should keep learning day by day to maintain our mental power and expand our intellectual capacity.
 
 Constant learning supplies us with fuel for driving us to sharpen our power of reasoning, analysis, and judgment. Continuous learning is the best way to keep pace with the times in the information age.
 
@@ -72,3 +73,33 @@ Lack of learning will inevitably lead to the stagnation of the mind, or even wor
 - intellectual capacity 智力
 - supply sb with sth 为某人提供某物
     - provide/offer sb with sth
+- inevitably 
+  - adv. used to say that something is certain to happen and cannot be avoided.
+  - If you eat that much every day, you’ll inevitably gain weight.
+- lead to 导致
+  - result in
+  - cause
+- stagnation 停滞
+  - stage 
+  - economy grow/booming/slow down/stagnation/depression
+  - boost/stimulate economy grow/booming
+  - growing fast / inflation / stagflation
+- brunch = breakfast and lunch
+- fossilization 僵化
+- stay mentally/physically young
+- equate sth with sth 把...等同/当作...
+    - Many people equate wealth/money with happiness.
+    - regard sth as sth 把...等同/当作...
+    - take sth as sth
+
+
+## Jogging
+
+Every day, in all kinds of weather, <mark>thousands of men and women go jogging</mark>. Why has jogging — running slowly for long distances — <mark>become so popular</mark>? <mark>Most joggers like it</mark> because <mark>they have heard it is very good exercise</mark>. <mark>Jogging makes the heart stronger</mark> and <mark>helps people lose weight</mark>. It can also <mark>help them feel better about themselves</mark>.
+
+How fast should you go? Jog with a friend and talk to each others as you run. If you have difficulty taking, you are going too fast. How far should you jog? Remember not to go too far too soon. In fact you should walk, not run, the first few times. Then do some short jogs, but no more than what you can do comfortably.
+
+After that, increase your distance a quarter or half of a mile every two weeks <mark>or so</mark>. Maybe in a few years, you, too, can run in a marathon like thousands of other people do.
+
+- Why has jogging ... become ...
+  - has ... become: present perfect tense

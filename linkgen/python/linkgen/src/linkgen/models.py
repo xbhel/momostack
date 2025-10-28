@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import json
+from collections import defaultdict
 from dataclasses import dataclass, field
 from enum import StrEnum, auto, unique
 from typing import Self
+
+from linkgen.utils import text_util
 
 __author__ = "xbhel"
 __email__ = "xbhel@outlook.com"
@@ -18,6 +21,7 @@ class EntityType(StrEnum):
     PROMULGATOR = auto(), ()
     CASE_NO = auto(), ()
     LAW_ABBR = auto(), ()
+    LINK = (auto(), ())
     THIS_LAW = auto(), ("LAW_TITLE",)
     LAW_SELF = auto(), ("LAW_TITLE",)
     LAW_DYNAMIC_ABBR = auto(), ("LAW_TITLE",)
@@ -83,6 +87,11 @@ class Entity(Token):
             alias=alias,
         )
 
+    def refer(self) -> Entity:
+        if self.refers_to is None:
+            return self
+        return self.refers_to.refer()
+
 
 @dataclass
 class TokenSpan:
@@ -106,9 +115,10 @@ class TokenSpan:
     def core_term(self) -> str:
         return self.core.text
 
-    def to_simple_json(self) -> str:
+    def to_json(self) -> str:
         return json.dumps(
             {
+                "text": self.normalized_text,
                 "core_term": self.core_term,
                 "prefixes": self.text_prefixes,
                 "suffixes": self.text_suffixes,
@@ -131,9 +141,33 @@ class DocMeta:
     release_date: int
     version: str
     version_timestamp: int
+    is_english: bool = False
     promulgators: list[str] = field(default_factory=list)
     effective_status: str | None = None
     effective_scope: str | None = None
     effective_date: int | None = None
-    article_max_num: int | None = None
-    article_min_num: int | None = None
+    max_article_num: int | None = None
+    min_article_num: int | None = None
+
+
+@dataclass
+class EntityDTO:
+    text: str
+    entity_type: EntityType
+    attrs: dict[EntityType, set[str]] = field(default_factory=dict)
+
+    @classmethod
+    def from_entity(cls, entity: Entity) -> Self:
+        attrs: dict[EntityType, set[str]] = defaultdict(set)
+        for attr in entity.attrs:
+            attrs[attr.entity_type].add(attr.text)
+
+        text = entity.text
+        if entity.entity_type == EntityType.LAW_TITLE:
+            text = text_util.strip_bookmarks(text)
+
+        return cls(
+            text=text,
+            entity_type=entity.entity_type,
+            attrs=attrs,
+        )

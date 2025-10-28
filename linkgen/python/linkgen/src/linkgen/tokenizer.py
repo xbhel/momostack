@@ -25,6 +25,9 @@ if TYPE_CHECKING:
     import re
     from collections.abc import Iterable
 
+__author__ = "xbhel"
+__email__ = "xbhel@outlook.com"
+
 
 _FORWARD_CHINESE: Final = config["forward_chinese"]
 _ABOUT_CHINESE: Final = config["about_chinese"]

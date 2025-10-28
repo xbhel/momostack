@@ -1,0 +1,16 @@
+# General configuration
+country_scope = "全国"
+forward_chinese = "转发"
+about_chinese = "关于"
+common_prefixes = ["中华人民共和国"]
+ineffective_status = ["尚未生效", "征求意见稿或草案", "To be effective", "Draft for comments or Draft"]
+left_brackets = ["(", "（"]
+right_brackets = [")", "）"]
+sentence_ending = ["?", "!", ".", "。", "？", "！"]
+
+check_abbr_if_suffixes = ["法"]
+ignore_abbr_if_next_prefixes = ["制", "务", "令", "规", "律"]
+
+# Mapping configuration
+[mapping]
+files = ["keyword_mapping.json", "law_abbr_mapping.json", "pattern_mapping.json", "promulgator_mapping.json"]

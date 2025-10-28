@@ -15,8 +15,8 @@
     "effective_status": "已被修改",
     "effective_scope": "广东省",
     "effective_date": 662659200,
-    "article_max_num": null,
-    "article_min_num": null
+    "max_article_num": null,
+    "min_article_num": null
   },
   {
     "doc_id": "law_002",
@@ -34,8 +34,8 @@
     "effective_status": "现行有效",
     "effective_scope": "全国",
     "effective_date": 837100800,
-    "article_max_num": 30,
-    "article_min_num": 1
+    "max_article_num": 30,
+    "min_article_num": 1
   },
   {
     "doc_id": "law_003",
@@ -53,8 +53,8 @@
     "effective_status": "失效",
     "effective_scope": "全国",
     "effective_date": 922896000,
-    "article_max_num": 44,
-    "article_min_num": 1
+    "max_article_num": 44,
+    "min_article_num": 1
   },
   {
     "doc_id": "law_004",
@@ -72,8 +72,8 @@
     "effective_status": "失效",
     "effective_scope": "全国",
     "effective_date": 1478793600,
-    "article_max_num": 64,
-    "article_min_num": 1
+    "max_article_num": 64,
+    "min_article_num": 1
   },
   {
     "doc_id": "law_005",
@@ -91,8 +91,8 @@
     "effective_status": "现行有效",
     "effective_scope": "广东省",
     "effective_date": 1531958400,
-    "article_max_num": null,
-    "article_min_num": null
+    "max_article_num": null,
+    "min_article_num": null
   },
   {
     "doc_id": "law_006",
@@ -110,7 +110,7 @@
     "effective_status": "现行有效",
     "effective_scope": "广东省",
     "effective_date": 1531958400,
-    "article_max_num": null,
-    "article_min_num": null
+    "max_article_num": null,
+    "min_article_num": null
   }
 ]
